@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  benfek
+  principal
+  pharmacy
+  researcher
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          Role           @default(benfek)
+  refreshTokens RefreshToken[]
+  podcasts      Podcast[]
+  supplements   Supplement[]
+  carts         Cart[]
+  orders        Order[]
+  payments      Payment[]
+  inbox         Inbox[]
+  wallet        Wallet?
+  withdrawals   Withdrawal[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Podcast {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  audioUrl    String
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Supplement {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String
+  price       Float
+  stock       Int
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Cart {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id           Int        @id @default(autoincrement())
+  quantity     Int
+  cartId       Int
+  cart         Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  supplementId Int
+  supplement   Supplement @relation(fields: [supplementId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  userId     Int
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+  payment    Payment?
+  status     String      @default("pending")
+  total      Float
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model OrderItem {
+  id           Int        @id @default(autoincrement())
+  quantity     Int
+  price       Float
+  orderId      Int
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplementId Int
+  supplement   Supplement @relation(fields: [supplementId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Payment {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id])
+  amount      Float
+  method      String
+  status      String   @default("pending")
+  transaction String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Inbox {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Wallet {
+  id            Int          @id @default(autoincrement())
+  balance       Float        @default(0)
+  userId        Int          @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  withdrawals   Withdrawal[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Withdrawal {
+  id            Int      @id @default(autoincrement())
+  amount        Float
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId      Int
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  status        String   @default("pending") // pending, completed, failed
+  bankName      String
+  accountNumber String
+  accountName   String
+  month         Int      // To track monthly withdrawals
+  year          Int      // To track monthly withdrawals
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

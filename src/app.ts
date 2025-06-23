@@ -1,0 +1,44 @@
+import 'reflect-metadata';
+import express from 'express';
+import morgan from 'morgan';
+import swaggerJSDoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+import { container } from './config/container';
+import { createRoutes } from './routes';
+
+const PORT = process.env.PORT || 3000;
+
+const app = express();
+
+// Middleware
+app.use(morgan('dev')); // Adds HTTP request logging
+app.use(express.json());
+
+// Swagger configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'HLS API ',
+      version: '1.0.0',
+      description: 'API Documentation',
+    },
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+      },
+    ],
+  },
+  apis: ['./src/routes/*.ts', './src/controllers/*.ts'],
+};
+
+const swaggerDocs = swaggerJSDoc(swaggerOptions);
+app.use('/doc', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+// Routes
+app.use('/api/v2', createRoutes(container));
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`API Documentation available at http://localhost:${PORT}/doc`);
+});
