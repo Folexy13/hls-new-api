@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response, Request, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AuthenticatedRequest } from '../types/auth.types';
 
@@ -94,6 +94,8 @@ export class ResponseUtil {
 
 export function authenticatedHandler(
   handler: (req: AuthenticatedRequest, res: Response) => Promise<Response>
-): (req: Request, res: Response) => Promise<Response> {
-  return (req, res) => handler(req as unknown as AuthenticatedRequest, res);
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    handler(req as AuthenticatedRequest, res).catch(next);
+  };
 }

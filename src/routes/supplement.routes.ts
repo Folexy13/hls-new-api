@@ -2,8 +2,7 @@ import { Router } from 'express';
 import { Container } from 'inversify';
 import { SupplementController } from '../controllers/supplement.controller';
 import { AuthGuard } from '../middlewares/auth.guard';
-import type { Request, Response } from 'express';
-import type { AuthenticatedRequest } from '../types/auth.types';
+import { authenticatedHandler } from '../utilities/response.utility';
 
 export const createSupplementRoutes = (container: Container): Router => {
   const router = Router();
@@ -34,9 +33,9 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: List of supplements retrieved successfully
    */
-  router.get('/', (req: Request, res: Response) => {
-    return supplementController.getSupplements(req as AuthenticatedRequest, res);
-  });
+  router.get('/', 
+    authenticatedHandler(supplementController.getSupplements.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -54,9 +53,9 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: Search results retrieved successfully
    */
-  router.get('/search', (req: Request, res: Response) => {
-    return supplementController.searchSupplements(req as AuthenticatedRequest, res);
-  });
+  router.get('/search', 
+    authenticatedHandler(supplementController.searchSupplements.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -70,9 +69,10 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: List of user's supplements retrieved successfully
    */
-  router.get('/user', authGuard.verify(), (req: Request, res: Response) => {
-    return supplementController.getUserSupplements(req as AuthenticatedRequest, res);
-  });
+  router.get('/user', 
+    authGuard.verify(), 
+    authenticatedHandler(supplementController.getUserSupplements.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -90,9 +90,9 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: Supplement details retrieved successfully
    */
-  router.get('/:id', (req: Request, res: Response) => {
-    return supplementController.getSupplementById(req as AuthenticatedRequest, res);
-  });
+  router.get('/:id', 
+    authenticatedHandler(supplementController.getSupplementById.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -112,9 +112,10 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       201:
    *         description: Supplement created successfully
    */
-  router.post('/', authGuard.verify(), (req: Request, res: Response) => {
-    return supplementController.createSupplement(req as AuthenticatedRequest, res);
-  });
+  router.post('/', 
+    authGuard.verify(), 
+    authenticatedHandler(supplementController.createSupplement.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -140,9 +141,10 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: Supplement updated successfully
    */
-  router.put('/:id', authGuard.verify(), (req: Request, res: Response) => {
-    return supplementController.updateSupplement(req as AuthenticatedRequest, res);
-  });
+  router.put('/:id', 
+    authGuard.verify(), 
+    authenticatedHandler(supplementController.updateSupplement.bind(supplementController))
+  );
 
   /**
    * @swagger
@@ -162,9 +164,10 @@ export const createSupplementRoutes = (container: Container): Router => {
    *       200:
    *         description: Supplement deleted successfully
    */
-  router.delete('/:id', authGuard.verify(), (req: Request, res: Response) => {
-    return supplementController.deleteSupplement(req as AuthenticatedRequest, res);
-  });
+  router.delete('/:id', 
+    authGuard.verify(), 
+    authenticatedHandler(supplementController.deleteSupplement.bind(supplementController))
+  );
 
   return router;
 };

@@ -1,8 +1,37 @@
 import { injectable, inject } from 'inversify';
 import { CartRepository } from '../repositories/cart.repository';
-import { Cart, CartItem } from '@prisma/client';
-import { AddToCartDTO, UpdateCartItemDTO } from '../DTOs/cart.dto';
 import { PrismaClient } from '@prisma/client';
+import { AddToCartDTO, UpdateCartItemDTO } from '../DTOs/cart.dto';
+import { AppError } from '../utilities/errors';
+
+// Define cart item type with supplement
+type CartItemWithSupplement = {
+  id: number;
+  quantity: number;
+  cartId: number;
+  supplementId: number;
+  supplement: {
+    id: number;
+    name: string;
+    description: string;
+    price: number;
+    stock: number;
+    userId: number;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// Define cart type with items
+type CartWithItems = {
+  id: number;
+  userId: number;
+  items: CartItemWithSupplement[];
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 @injectable()
 export class CartService {
@@ -11,11 +40,9 @@ export class CartService {
     @inject('PrismaClient') private prisma: PrismaClient
   ) {}
 
-  async getCart(userId: number): Promise<Cart | null> {
-    return this.cartRepository.findByUserId(userId);
-  }
-
-  async addToCart(userId: number, data: AddToCartDTO): Promise<Cart> {
+  async getCart(userId: number): Promise<CartWithItems | null> {
+    return this.cartRepository.findByUserId(userId) as Promise<CartWithItems | null>;
+  }  async addToCart(userId: number, data: AddToCartDTO): Promise<CartWithItems> {
     const cart = await this.getOrCreateCart(userId);
     
     // Check if supplement exists in cart
@@ -23,75 +50,52 @@ export class CartService {
     
     if (existingItem) {
       // Update quantity if item exists
-      await this.prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: { quantity: existingItem.quantity + data.quantity }
-      });
+      await this.cartRepository.updateItem(existingItem.id, existingItem.quantity + data.quantity);
     } else {
       // Add new item if it doesn't exist
-      await this.prisma.cartItem.create({
-        data: {
-          cartId: cart.id,
-          supplementId: data.supplementId,
-          quantity: data.quantity
-        }
-      });
+      await this.cartRepository.addItem(cart.id, data.supplementId, data.quantity);
     }
 
-    return this.cartRepository.findById(cart.id) as Promise<Cart>;
-  }
-
-  async updateCartItem(userId: number, itemId: number, data: UpdateCartItemDTO): Promise<Cart> {
+    return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
+  }  async updateCartItem(userId: number, itemId: number, data: UpdateCartItemDTO): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
-      throw new Error('Cart not found');
+      throw new AppError('Cart not found', 404);
     }
 
     const cartItem = cart.items.find(item => item.id === itemId);
     if (!cartItem) {
-      throw new Error('Cart item not found');
+      throw new AppError('Cart item not found', 404);
     }
 
-    await this.prisma.cartItem.update({
-      where: { id: itemId },
-      data: { quantity: data.quantity }
-    });
+    await this.cartRepository.updateItem(itemId, data.quantity);
 
-    return this.cartRepository.findById(cart.id) as Promise<Cart>;
-  }
-
-  async removeCartItem(userId: number, itemId: number): Promise<Cart> {
+    return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
+  }  async removeCartItem(userId: number, itemId: number): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
-      throw new Error('Cart not found');
+      throw new AppError('Cart not found', 404);
     }
 
     const cartItem = cart.items.find(item => item.id === itemId);
     if (!cartItem) {
-      throw new Error('Cart item not found');
+      throw new AppError('Cart item not found', 404);
     }
 
-    await this.prisma.cartItem.delete({
-      where: { id: itemId }
-    });
+    await this.cartRepository.removeItem(itemId);
 
-    return this.cartRepository.findById(cart.id) as Promise<Cart>;
-  }
-
-  async clearCart(userId: number): Promise<Cart> {
+    return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
+  }  async clearCart(userId: number): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
-      throw new Error('Cart not found');
+      throw new AppError('Cart not found', 404);
     }
 
-    await this.prisma.cartItem.deleteMany({
-      where: { cartId: cart.id }
-    });
+    await this.cartRepository.clearCart(cart.id);
 
-    return this.cartRepository.findById(cart.id) as Promise<Cart>;
+    return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
   }
-
-  private async getOrCreateCart(userId: number): Promise<Cart> {
+  private async getOrCreateCart(userId: number): Promise<CartWithItems> {
     let cart = await this.cartRepository.findByUserId(userId);
     
     if (!cart) {
@@ -104,7 +108,7 @@ export class CartService {
     return cart;
   }
 
-  async getCartTotal(cart: Cart): Promise<number> {
+  async getCartTotal(cart: CartWithItems): Promise<number> {
     let total = 0;
     for (const item of cart.items) {
       total += item.quantity * item.supplement.price;

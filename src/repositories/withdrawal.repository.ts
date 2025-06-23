@@ -5,14 +5,21 @@ import { IRepository } from '../types/types';
 @injectable()
 export class WithdrawalRepository implements IRepository<Withdrawal> {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
-
-  async findAll(): Promise<Withdrawal[]> {
-    return this.prisma.withdrawal.findMany({
-      include: {
-        user: true,
-        wallet: true
-      }
-    });
+  async findAll(skip?: number, take?: number): Promise<{ items: Withdrawal[]; total: number }> {
+    const [withdrawals, total] = await Promise.all([
+      this.prisma.withdrawal.findMany({
+        skip,
+        take,
+        include: {
+          user: true,
+          wallet: true
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.withdrawal.count()
+    ]);
+    
+    return { items: withdrawals, total };
   }
 
   async findById(id: number): Promise<Withdrawal | null> {

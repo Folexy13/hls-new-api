@@ -1,9 +1,9 @@
 import type { Container } from 'inversify';
 
 export interface IRepository<T> {
-  findAll(): Promise<T[]>;
+  findAll(skip?: number, take?: number): Promise<{ items: T[]; total: number }>;
   findById(id: number): Promise<T | null>;
-  create(data: Omit<T, 'id'>): Promise<T>;
+  create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<T>;
   update(id: number, data: Partial<T>): Promise<T>;
   delete(id: number): Promise<void>;
 }

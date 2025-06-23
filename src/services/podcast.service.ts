@@ -10,11 +10,10 @@ export class PodcastService {
   constructor(
     @inject(PodcastRepository) private podcastRepository: PodcastRepository,
     @inject(S3Service) private s3Service: S3Service
-  ) {}
-
-  async findAll(page: number = 1, limit: number = 10): Promise<{ podcasts: Podcast[]; total: number }> {
+  ) {}  async findAll(page: number = 1, limit: number = 10): Promise<{ podcasts: Podcast[]; total: number }> {
     const skip = (page - 1) * limit;
-    return this.podcastRepository.findAll(skip, limit);
+    const result = await this.podcastRepository.findAll(skip, limit);
+    return { podcasts: result.items, total: result.total };
   }
 
   async findById(id: number): Promise<Podcast | null> {

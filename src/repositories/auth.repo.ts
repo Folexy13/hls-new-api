@@ -1,7 +1,7 @@
 
 import { PrismaClient, User } from '@prisma/client';
 import { injectable, inject } from 'inversify';
-import { RegisterUserDTO } from '../dtos/auth.dto';
+import { RegisterUserDTO } from '../DTOs/auth.dto';
 import { AuthRepository } from './Abstractions/authrepo';
 
 @injectable()

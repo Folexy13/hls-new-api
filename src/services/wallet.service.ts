@@ -2,32 +2,64 @@ import { injectable, inject } from 'inversify';
 import { WalletRepository } from '../repositories/wallet.repository';
 import { WithdrawalRepository } from '../repositories/withdrawal.repository';
 import { WithdrawalDTO } from '../DTOs/wallet.dto';
-import { PrismaClient, Role, Wallet, Withdrawal } from '@prisma/client';
+import { Role } from '../types/auth.types';
+
+// Define wallet and withdrawal types
+interface Wallet {
+  id: number;
+  userId: number;
+  balance: number;
+  withdrawals: Withdrawal[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface Withdrawal {
+  id: number;
+  userId: number;
+  walletId: number;
+  amount: number;
+  status: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  month: number;
+  year: number;
+  wallet?: Wallet;
+  user?: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 @injectable()
 export class WalletService {
   constructor(
     @inject(WalletRepository) private walletRepository: WalletRepository,
     @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository
-  ) {}
+  ) {}  async getWallet(userId: number): Promise<Wallet | null> {
+    const wallet = await this.walletRepository.findByUserId(userId);
+    if (!wallet) return null;
 
-  async getWallet(userId: number): Promise<Wallet | null> {
-    return this.walletRepository.findByUserId(userId);
+    // Cast the wallet to match our interface 
+    // Since the PrismaClient type definitions are missing in our build
+    return wallet as unknown as Wallet;
+  }  async creditWallet(walletId: number, amount: number): Promise<Wallet> {
+    const wallet = await this.walletRepository.updateBalance(walletId, amount, true);
+    
+    // Cast the wallet to match our interface
+    return wallet as unknown as Wallet;
   }
-
-  async creditWallet(walletId: number, amount: number): Promise<Wallet> {
-    return this.walletRepository.updateBalance(walletId, amount, true);
-  }
-
   async debitWallet(walletId: number, amount: number): Promise<Wallet> {
-    const wallet = await this.walletRepository.findById(walletId);
-    if (!wallet) {
+    const existingWallet = await this.walletRepository.findById(walletId);
+    if (!existingWallet) {
       throw new Error('Wallet not found');
     }
-    if (wallet.balance < amount) {
+    if (existingWallet.balance < amount) {
       throw new Error('Insufficient balance');
     }
-    return this.walletRepository.updateBalance(walletId, amount, false);
+    const updatedWallet = await this.walletRepository.updateBalance(walletId, amount, false);
+      // Cast the wallet to match our interface
+    return updatedWallet as unknown as Wallet;
   }
   async requestWithdrawal(
     userId: number,
@@ -46,7 +78,7 @@ export class WalletService {
       year
     );
 
-    const withdrawalLimit = userRole === Role.pharmacy ? 3 : 2;
+    const withdrawalLimit = userRole === 'pharmacy' ? 3 : 2;
     if (monthlyWithdrawals.length >= withdrawalLimit) {
       throw new Error(`Monthly withdrawal limit of ${withdrawalLimit} reached for ${userRole} role`);
     }

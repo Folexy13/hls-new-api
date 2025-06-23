@@ -1,8 +1,8 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { Container } from 'inversify';
 import { WalletController } from '../controllers/wallet.controller';
 import { AuthGuard } from '../middlewares/auth.guard';
-import type { AuthenticatedRequest } from '../types/auth.types';
+import { authenticatedHandler } from '../utilities/response.utility';
 
 export const createWalletRoutes = (container: Container): Router => {
   const router = Router();
@@ -21,9 +21,11 @@ export const createWalletRoutes = (container: Container): Router => {
    *       200:
    *         description: Wallet details retrieved successfully
    */
-  router.get('/', authGuard.verify(), (req: Request, res: Response) => {
-    return walletController.getWallet(req as AuthenticatedRequest, res);
-  });
+  router.get(
+    '/',
+    authGuard.verify(),
+    authenticatedHandler(walletController.getWallet.bind(walletController))
+  );
 
   /**
    * @swagger
@@ -43,9 +45,11 @@ export const createWalletRoutes = (container: Container): Router => {
    *       200:
    *         description: Withdrawal request created successfully
    */
-  router.post('/withdrawals', authGuard.verify(), (req: Request, res: Response) => {
-    return walletController.requestWithdrawal(req as AuthenticatedRequest, res);
-  });
+  router.post(
+    '/withdrawals',
+    authGuard.verify(),
+    authenticatedHandler(walletController.requestWithdrawal.bind(walletController))
+  );
 
   /**
    * @swagger
@@ -59,9 +63,11 @@ export const createWalletRoutes = (container: Container): Router => {
    *       200:
    *         description: List of withdrawals retrieved successfully
    */
-  router.get('/withdrawals', authGuard.verify(), (req: Request, res: Response) => {
-    return walletController.getWithdrawals(req as AuthenticatedRequest, res);
-  });
+  router.get(
+    '/withdrawals',
+    authGuard.verify(),
+    authenticatedHandler(walletController.getWithdrawals.bind(walletController))
+  );
 
   /**
    * @swagger
@@ -81,9 +87,11 @@ export const createWalletRoutes = (container: Container): Router => {
    *       200:
    *         description: Withdrawal details retrieved successfully
    */
-  router.get('/withdrawals/:id', authGuard.verify(), (req: Request, res: Response) => {
-    return walletController.getWithdrawalById(req as AuthenticatedRequest, res);
-  });
+  router.get(
+    '/withdrawals/:id',
+    authGuard.verify(),
+    authenticatedHandler(walletController.getWithdrawalById.bind(walletController))
+  );
 
   return router;
 };

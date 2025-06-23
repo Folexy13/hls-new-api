@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { LoginUserDTO, RegisterUserDTO } from '../dtos/auth.dto';
+import { LoginUserDTO, RegisterUserDTO } from '../DTOs/auth.dto';
 import AuthRepositoryImpl from '../repositories/auth.repo';
 import { UnauthorizedError } from '../utilities/errors';
 

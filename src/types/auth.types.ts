@@ -1,6 +1,10 @@
 import { Request } from 'express';
-import type { User } from '@prisma/client';
+
+export type Role = 'benfek' | 'principal' | 'pharmacy' | 'researcher';
 
 export interface AuthenticatedRequest extends Request {
-  user: User;
+  user: {
+    id: number;
+    role: Role;
+  };
 }

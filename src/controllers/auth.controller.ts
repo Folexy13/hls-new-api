@@ -8,7 +8,7 @@ import {
   LoginUserSchema,
   RegisterUserSchema,
   RefreshTokenSchema
-} from '../dtos/auth.dto';
+} from '../DTOs/auth.dto';
 import { Container } from 'inversify';
 import { AppError } from '../utilities/errors';
 

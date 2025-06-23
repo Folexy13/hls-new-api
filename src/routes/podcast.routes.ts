@@ -2,12 +2,11 @@ import { Router } from 'express';
 import { Container } from 'inversify';
 import { PodcastController } from '../controllers/podcast.controller';
 import { AuthGuard } from '../middlewares/auth.guard';
-import type { Request, Response } from 'express';
-import type { AuthenticatedRequest } from '../types/auth.types';
+import { authenticatedHandler } from '../utilities/response.utility';
 
 export const createPodcastRoutes = (container: Container): Router => {
   const router = Router();
-  const controller = container.get(PodcastController);
+  const podcastController = container.get(PodcastController);
   const authGuard = container.get(AuthGuard);
 
   /**
@@ -34,9 +33,9 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: List of podcasts retrieved successfully
    */
-  router.get('/', (req: Request, res: Response) => {
-    return controller.getPodcasts(req as AuthenticatedRequest, res);
-  });
+  router.get('/', 
+    authenticatedHandler(podcastController.getPodcasts.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -54,9 +53,9 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: Search results retrieved successfully
    */
-  router.get('/search', (req: Request, res: Response) => {
-    return controller.searchPodcasts(req as AuthenticatedRequest, res);
-  });
+  router.get('/search', 
+    authenticatedHandler(podcastController.searchPodcasts.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -70,9 +69,10 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: List of user's podcasts retrieved successfully
    */
-  router.get('/user', authGuard.verify(), (req: Request, res: Response) => {
-    return controller.getUserPodcasts(req as AuthenticatedRequest, res);
-  });
+  router.get('/user', 
+    authGuard.verify(), 
+    authenticatedHandler(podcastController.getUserPodcasts.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -90,9 +90,9 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: Podcast details retrieved successfully
    */
-  router.get('/:id', (req: Request, res: Response) => {
-    return controller.getPodcastById(req as AuthenticatedRequest, res);
-  });
+  router.get('/:id', 
+    authenticatedHandler(podcastController.getPodcastById.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -110,9 +110,9 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: Streaming URL retrieved successfully
    */
-  router.get('/:id/stream', (req: Request, res: Response) => {
-    return controller.getStreamUrl(req as AuthenticatedRequest, res);
-  });
+  router.get('/:id/stream', 
+    authenticatedHandler(podcastController.getStreamUrl.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -142,9 +142,10 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       201:
    *         description: Podcast created successfully
    */
-  router.post('/', authGuard.verify(), (req: Request, res: Response) => {
-    return controller.createPodcast(req as AuthenticatedRequest, res);
-  });
+  router.post('/', 
+    authGuard.verify(), 
+    authenticatedHandler(podcastController.createPodcast.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -170,9 +171,10 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: Podcast updated successfully
    */
-  router.put('/:id', authGuard.verify(), (req: Request, res: Response) => {
-    return controller.updatePodcast(req as AuthenticatedRequest, res);
-  });
+  router.put('/:id', 
+    authGuard.verify(), 
+    authenticatedHandler(podcastController.updatePodcast.bind(podcastController))
+  );
 
   /**
    * @swagger
@@ -192,9 +194,10 @@ export const createPodcastRoutes = (container: Container): Router => {
    *       200:
    *         description: Podcast deleted successfully
    */
-  router.delete('/:id', authGuard.verify(), (req: Request, res: Response) => {
-    return controller.deletePodcast(req as AuthenticatedRequest, res);
-  });
+  router.delete('/:id', 
+    authGuard.verify(), 
+    authenticatedHandler(podcastController.deletePodcast.bind(podcastController))
+  );
 
   return router;
 };

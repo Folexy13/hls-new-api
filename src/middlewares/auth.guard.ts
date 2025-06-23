@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { injectable } from 'inversify';
 import { verify } from 'jsonwebtoken';
 import { ResponseUtil } from '../utilities/response.utility';
-import type { AuthenticatedRequest } from '../types/auth.types';
+import type { AuthenticatedRequest, Role } from '../types/auth.types';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -21,12 +21,10 @@ export class AuthGuard {
         if (!token) {
           ResponseUtil.error(res, 'Invalid token format', 401);
           return;
-        }
-
-        const decoded = verify(token, JWT_SECRET) as { id: number; role: string };
+        }        const decoded = verify(token, JWT_SECRET) as { id: number; role: string };
         (req as AuthenticatedRequest).user = {
           id: decoded.id,
-          role: decoded.role
+          role: decoded.role as Role
         };
 
         next();

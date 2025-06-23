@@ -5,11 +5,12 @@ import { AppError } from '../utilities/errors';
 import { SupplementRepository } from '../repositories/supplement.repository';
 
 @injectable()
-export class SupplementService {
-  constructor(@inject(SupplementRepository) private supplementRepository: SupplementRepository) {}
+export class SupplementService {  constructor(@inject(SupplementRepository) private supplementRepository: SupplementRepository) {}
+  
   async findAll(page: number = 1, limit: number = 10): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
-    return this.supplementRepository.findAll(skip, limit);
+    const result = await this.supplementRepository.findAll(skip, limit);
+    return { supplements: result.items, total: result.total };
   }
 
   async findById(id: number): Promise<Supplement | null> {
