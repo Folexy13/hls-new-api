@@ -4,9 +4,10 @@
   "description": "Node.js TypeScript API with Prisma and MySQL",
   "main": "dist/app.js",
   "scripts": {
+    "build": "prisma generate && tsc",
     "start": "node ./dist/app.js",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-    "build": "tsc",
+   
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
