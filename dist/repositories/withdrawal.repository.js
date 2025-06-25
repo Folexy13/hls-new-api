@@ -1,0 +1,96 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.WithdrawalRepository = void 0;
+const client_1 = require("@prisma/client");
+const inversify_1 = require("inversify");
+let WithdrawalRepository = class WithdrawalRepository {
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async findAll(skip, take) {
+        const [withdrawals, total] = await Promise.all([
+            this.prisma.withdrawal.findMany({
+                skip,
+                take,
+                include: {
+                    user: true,
+                    wallet: true
+                },
+                orderBy: { createdAt: 'desc' }
+            }),
+            this.prisma.withdrawal.count()
+        ]);
+        return { items: withdrawals, total };
+    }
+    async findById(id) {
+        return this.prisma.withdrawal.findUnique({
+            where: { id },
+            include: {
+                user: true,
+                wallet: true
+            }
+        });
+    }
+    async findByUserId(userId) {
+        return this.prisma.withdrawal.findMany({
+            where: { userId },
+            include: {
+                user: true,
+                wallet: true
+            }
+        });
+    }
+    async findUserWithdrawalsForMonth(userId, month, year) {
+        return this.prisma.withdrawal.findMany({
+            where: {
+                userId,
+                month,
+                year,
+                status: 'completed'
+            }
+        });
+    }
+    async create(data) {
+        return this.prisma.withdrawal.create({
+            data,
+            include: {
+                user: true,
+                wallet: true
+            }
+        });
+    }
+    async update(id, data) {
+        return this.prisma.withdrawal.update({
+            where: { id },
+            data,
+            include: {
+                user: true,
+                wallet: true
+            }
+        });
+    }
+    async delete(id) {
+        await this.prisma.withdrawal.delete({
+            where: { id }
+        });
+    }
+};
+exports.WithdrawalRepository = WithdrawalRepository;
+exports.WithdrawalRepository = WithdrawalRepository = __decorate([
+    (0, inversify_1.injectable)(),
+    __param(0, (0, inversify_1.inject)('PrismaClient')),
+    __metadata("design:paramtypes", [client_1.PrismaClient])
+], WithdrawalRepository);
+//# sourceMappingURL=withdrawal.repository.js.map

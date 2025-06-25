@@ -7,7 +7,6 @@
     "build": "npx prisma generate && tsc",
     "start": "node ./dist/app.js",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-   
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -29,6 +28,7 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
@@ -45,6 +45,7 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@typescript-eslint/eslint-plugin": "^8.34.1",
