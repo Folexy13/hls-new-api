@@ -15,7 +15,11 @@ const app = express();
 app.use(morgan('dev')); // Adds HTTP request logging
 app.use(express.json());
 app.use(cors({
+<<<<<<< HEAD
   origin: ['https://hls-new.netlify.app','http://localhost:3000'], // or an array of allowed origins
+=======
+  origin: ['https://hls-new.netlify.app',"http://localhost:3000","https://deploy-preview-7--hls-new.netlify.app"], // or an array of allowed origins
+>>>>>>> f5bdeae4c31a36b2511693bf89dc56d9591c9ed4
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
