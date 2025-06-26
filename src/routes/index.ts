@@ -6,6 +6,7 @@ import { createWalletRoutes } from './wallet.routes';
 import { createCartRoutes } from './cart.routes';
 import { createSupplementRoutes } from './supplement.routes';
 import { createPodcastRoutes } from './podcast.routes';
+import { createPaystackRoutes } from './paystack.routes';
 
 export const createRoutes = (container: Container): Router => {
   const router = Router();
@@ -28,6 +29,8 @@ export const createRoutes = (container: Container): Router => {
   router.use('/supplements', createSupplementRoutes(container));
   // Mount podcast routes
   router.use('/podcasts', createPodcastRoutes(container));
+  // Mount paystack routes
+  router.use('/paystack', createPaystackRoutes(container));
 
   return router;
 };

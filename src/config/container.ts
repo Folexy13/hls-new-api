@@ -20,6 +20,8 @@ import { CartRepository } from '../repositories/cart.repository';
 import { SupplementRepository } from '../repositories/supplement.repository';
 import { SupplementService } from '../services/supplement.service';
 import { SupplementController } from '../controllers/supplement.controller';
+import { PaystackRepository } from '../repositories/paystack.repository';
+import { PaystackController } from '../controllers/paystack.controller';
 
 const container = new Container();
 
@@ -37,6 +39,7 @@ container.bind<WithdrawalRepository>(WithdrawalRepository).toSelf();
 container.bind<PodcastRepository>(PodcastRepository).toSelf();
 container.bind<CartRepository>(CartRepository).toSelf();
 container.bind<SupplementRepository>(SupplementRepository).toSelf();
+container.bind<PaystackRepository>(PaystackRepository).toSelf();
 
 // Bind utilities
 container.bind<ResponseUtil>(ResponseUtil).toSelf();
@@ -57,5 +60,6 @@ container.bind<WalletController>(WalletController).toSelf();
 container.bind<PodcastController>(PodcastController).toSelf();
 container.bind<CartController>(CartController).toSelf();
 container.bind<SupplementController>(SupplementController).toSelf();
+container.bind<PaystackController>(PaystackController).toSelf();
 
 export { container };
