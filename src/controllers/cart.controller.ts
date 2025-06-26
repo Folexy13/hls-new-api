@@ -119,6 +119,7 @@ export class CartController extends BaseController {
    *         description: Cart not found
    */
   async getCart(req: AuthenticatedRequest, res: Response) {
+    console.log('Fetching cart for user:', req.user);
     try {
       const userId = req.user.id;
       const cart = await this.cartService.getCart(userId);
@@ -162,6 +163,7 @@ export class CartController extends BaseController {
    */
   async addToCart(req: AuthenticatedRequest, res: Response) {
     try {
+      console.log('Adding item to cart:', req.user);
       const userId = req.user.id;
       const data = AddToCartSchema.parse(req.body);
       const cart = await this.cartService.addToCart(userId, data);

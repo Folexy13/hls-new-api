@@ -77,7 +77,7 @@ export class AuthService {
 
   private generateAccessToken(user: any): string {
     return jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '15m' }
     );
