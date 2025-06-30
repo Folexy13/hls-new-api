@@ -1,3 +1,8 @@
+
+
+import { NutrientTypeRepository } from '../repositories/nutrienttype.repository';
+import { NutrientTypeService } from '../services/nutrienttype.service';
+import { NutrientTypeController } from '../controllers/nutrienttype.controller';
 import { Container } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { PingController } from '../controllers/ping.controller';
@@ -33,6 +38,7 @@ const prisma = new PrismaClient();
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma);
 
 // Bind repositories
+container.bind<NutrientTypeRepository>(NutrientTypeRepository).toSelf();
 container.bind<AuthRepositoryImpl>(AuthRepositoryImpl).toSelf();
 container.bind<WalletRepository>(WalletRepository).toSelf();
 container.bind<WithdrawalRepository>(WithdrawalRepository).toSelf();
@@ -47,6 +53,7 @@ container.bind<AuthGuard>(AuthGuard).toSelf();
 container.bind<S3Service>(S3Service).toSelf();
 
 // Bind services
+container.bind<NutrientTypeService>(NutrientTypeService).toSelf();
 container.bind<AuthService>(AuthService).toSelf();
 container.bind<WalletService>(WalletService).toSelf();
 container.bind<PodcastService>(PodcastService).toSelf();
@@ -54,6 +61,7 @@ container.bind<CartService>(CartService).toSelf();
 container.bind<SupplementService>(SupplementService).toSelf();
 
 // Bind controllers
+container.bind<NutrientTypeController>(NutrientTypeController).toSelf();
 container.bind<PingController>(PingController).toSelf();
 container.bind<AuthController>(AuthController).toSelf();
 container.bind<WalletController>(WalletController).toSelf();

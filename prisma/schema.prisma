@@ -23,6 +23,7 @@ model User {
   phone         String?
   role          Role           @default(benfek)
   refreshTokens RefreshToken[]
+  userId        String?        @unique
   podcasts      Podcast[]
   supplements   Supplement[]
   carts         Cart[]
@@ -31,6 +32,7 @@ model User {
   inbox         Inbox[]
   wallet        Wallet?
   withdrawals   Withdrawal[]
+  nutrient      NutrientType?  // One-to-one relation, no fields/references here
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -75,7 +77,7 @@ model Cart {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     CartItem[]
   createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model CartItem {
@@ -164,3 +166,55 @@ model Withdrawal {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model NutrientType {
+  id            Int         @id @default(autoincrement())
+  code          String
+  userId        Int         @unique // Ensures one-to-one with User
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  basic         Basic?      @relation
+  basicId       Int?        @unique // Field for one-to-one relation with Basic
+  lifestyle     Lifestyle?  @relation
+  lifestyleId   Int?        @unique // Field for one-to-one relation with Lifestyle
+  preference    Preference? @relation
+  preferenceId  Int?        @unique // Field for one-to-one relation with Preference
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Basic {
+  id          Int          @id @default(autoincrement())
+  nutrientId  Int          @unique // Ensures one-to-one with NutrientType
+  nutrient    NutrientType @relation(fields: [nutrientId], references: [id], onDelete: Cascade)
+  gender      String
+  nickname    String?
+  age         String
+  weight      String
+  height      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Lifestyle {
+  id          Int          @id @default(autoincrement())
+  nutrientId  Int          @unique // Ensures one-to-one with NutrientType
+  nutrient    NutrientType @relation(fields: [nutrientId], references: [id], onDelete: Cascade)
+  habit       String
+  fun         String
+  routine      String
+  career      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Preference {
+  id          Int          @id @default(autoincrement())
+  nutrientId  Int          @unique // Ensures one-to-one with NutrientType
+  nutrient    NutrientType @relation(fields: [nutrientId], references: [id], onDelete: Cascade)
+  drugForm    String
+  minBudget   Float
+  maxBudget   Float
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
