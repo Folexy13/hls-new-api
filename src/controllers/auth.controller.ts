@@ -23,7 +23,7 @@ export class AuthController extends BaseController {
 
   /**
    * @swagger
-   * /auth/register:
+   * /api/v2/auth/register:
    *   post:
    *     summary: Register a new user
    *     tags: [Auth]
@@ -75,7 +75,7 @@ export class AuthController extends BaseController {
 
   /**
    * @swagger
-   * /auth/login:
+   * /api/v2/auth/login:
    *   post:
    *     summary: Login user
    *     tags: [Auth]
@@ -120,7 +120,7 @@ export class AuthController extends BaseController {
 
   /**
    * @swagger
-   * /auth/refresh:
+   * /qpi/v2/auth/refresh:
    *   post:
    *     summary: Refresh access token
    *     tags: [Auth]
@@ -159,7 +159,7 @@ export class AuthController extends BaseController {
 
   /**
    * @swagger
-   * /auth/logout:
+   * /api/v2/auth/logout:
    *   post:
    *     summary: Logout user
    *     tags: [Auth]
