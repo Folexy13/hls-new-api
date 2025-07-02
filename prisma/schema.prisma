@@ -170,7 +170,7 @@ model Withdrawal {
 model NutrientType {
   id            Int         @id @default(autoincrement())
   code          String
-  userId        Int         @unique // Ensures one-to-one with User
+  userId        Int         @default(1)
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   basic         Basic?      @relation
   basicId       Int?        @unique // Field for one-to-one relation with Basic
