@@ -12,6 +12,7 @@ enum Role {
   principal
   pharmacy
   researcher
+  wholesaler
 }
 
 model User {

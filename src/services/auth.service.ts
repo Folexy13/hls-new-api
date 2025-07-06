@@ -1,9 +1,9 @@
-import { injectable, inject } from 'inversify';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { LoginUserDTO, RegisterUserDTO } from '../DTOs/auth.dto';
-import AuthRepositoryImpl from '../repositories/auth.repo';
-import { UnauthorizedError } from '../utilities/errors';
+import { injectable, inject } from "inversify";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { LoginUserDTO, RegisterUserDTO } from "../DTOs/auth.dto";
+import AuthRepositoryImpl from "../repositories/auth.repo";
+import { UnauthorizedError } from "../utilities/errors";
 
 @injectable()
 export class AuthService {
@@ -14,13 +14,13 @@ export class AuthService {
   async register(data: RegisterUserDTO) {
     const existingUser = await this.authRepository.findUserByEmail(data.email);
     if (existingUser) {
-      throw new Error('User already exists');
+      throw new Error("User already exists");
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
       ...data,
-      password: hashedPassword
+      password: hashedPassword,
     });
 
     const { password, ...userWithoutPassword } = user;
@@ -30,12 +30,12 @@ export class AuthService {
   async login(data: LoginUserDTO) {
     const user = await this.authRepository.findUserByEmail(data.email);
     if (!user) {
-      throw new UnauthorizedError('Invalid credentials');
+      throw new UnauthorizedError("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedError('Invalid credentials');
+      throw new UnauthorizedError("Invalid credentials");
     }
 
     const accessToken = this.generateAccessToken(user);
@@ -48,15 +48,15 @@ export class AuthService {
       user: userWithoutPassword,
       tokens: {
         accessToken,
-        refreshToken
-      }
+        refreshToken,
+      },
     };
   }
 
   async refreshToken(refreshToken: string) {
     const user = await this.authRepository.findUserByRefreshToken(refreshToken);
     if (!user) {
-      throw new UnauthorizedError('Invalid refresh token');
+      throw new UnauthorizedError("Invalid refresh token");
     }
 
     const newAccessToken = this.generateAccessToken(user);
@@ -66,8 +66,10 @@ export class AuthService {
     await this.authRepository.saveRefreshToken(user.id, newRefreshToken);
 
     return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken
+      tokens: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
     };
   }
 
@@ -78,16 +80,16 @@ export class AuthService {
   private generateAccessToken(user: any): string {
     return jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '15m' }
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "15m" }
     );
   }
 
   private generateRefreshToken(user: any): string {
     return jwt.sign(
       { userId: user.id },
-      process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
-      { expiresIn: '7d' }
+      process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key",
+      { expiresIn: "7d" }
     );
   }
 }
