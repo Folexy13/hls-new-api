@@ -183,7 +183,7 @@ export class WalletController extends BaseController {
     try {
       const withdrawalData = WithdrawalSchema.parse(req.body);
       const userId = req.user.id;
-      const userRole = req.user.role as Role;
+      const userRole = req.user.role as any;
       const wallet = await this.walletService.getWallet(userId);
 
       if (!wallet) {

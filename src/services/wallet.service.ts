@@ -78,7 +78,7 @@ export class WalletService {
       year
     );
 
-    const withdrawalLimit = userRole === 'pharmacy' ? 3 : 2;
+    const withdrawalLimit = userRole !== 'principal' ? 3 : 2;
     if (monthlyWithdrawals.length >= withdrawalLimit) {
       throw new Error(`Monthly withdrawal limit of ${withdrawalLimit} reached for ${userRole} role`);
     }
