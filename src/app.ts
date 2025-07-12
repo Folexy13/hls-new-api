@@ -18,7 +18,7 @@ app.use(
   cors({
     origin: [
       "https://hls-new.netlify.app",
-      "http://localhost:3000"
+      "http://localhost:7000"
     ], // or an array of allowed origins
 
     methods: ["GET", "POST", "PUT", "DELETE"],
