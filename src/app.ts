@@ -18,6 +18,7 @@ app.use(
   cors({
     origin: [
       "https://hls-new.netlify.app",
+      "https://staging-hls.netlify.app"
       "http://localhost:7000"
     ], // or an array of allowed origins
 
