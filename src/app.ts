@@ -19,7 +19,8 @@ app.use(
     origin: [
       "https://hls-new.netlify.app",
       "https://staging-hls.netlify.app",
-      "http://localhost:7000"
+      "http://localhost:7000",
+      "http://localhost:3000"
     ], // or an array of allowed origins
 
     methods: ["GET", "POST", "PUT", "DELETE"],
