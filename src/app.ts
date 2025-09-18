@@ -6,6 +6,8 @@ import swaggerUi from "swagger-ui-express";
 import { container } from "./config/container";
 import { createRoutes } from "./routes";
 import cors from "cors"; // Fixed the import statement
+import cron from "node-cron";
+import axios from "axios";
 
 const PORT = process.env.PORT || 3000;
 
@@ -62,4 +64,27 @@ app.listen(PORT, () => {
   console.log(`API Documentation available at http://localhost:${PORT}/doc`);
   // Log all registered routes (colorized)
   logRoutes(apiRouter, '/api/v2');
+
+  // Cron job to keep Render instance active - runs every 6 seconds
+  cron.schedule('*/6 * * * * *', async () => {
+    try {
+      const baseUrl = process.env.ENVIRONMENT === "dev" 
+        ? `http://localhost:${PORT}` 
+        : "https://hls-new-api.onrender.com";
+      
+      // Make a simple GET request to keep the instance alive
+      await axios.get(`${baseUrl}/api/v2/ping`, {
+        timeout: 5000, // 5 second timeout
+        headers: {
+          'User-Agent': 'Keep-Alive-Cron'
+        }
+      });
+      
+      console.log(`🏓 Keep-alive ping sent at ${new Date().toISOString()}`);
+    } catch (error: any) {
+      console.log(`❌ Keep-alive ping failed: ${error?.message || 'Unknown error'}`);
+    }
+  });
+
+  console.log('🕒 Keep-alive cron job started (runs every 6 seconds)');
 });
