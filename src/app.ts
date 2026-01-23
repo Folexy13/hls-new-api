@@ -19,10 +19,8 @@ app.use(express.json());
 app.use(
   cors({
     origin: [
-      "https://hls-new.netlify.app",
-      "https://staging-hls.netlify.app",
-      "http://localhost:7000",
-      "http://localhost:3000"
+      "https://www.hlsnigeria.com",
+      "https://hlsnigeria.com"
     ], // or an array of allowed origins
 
     methods: ["GET", "POST", "PUT", "DELETE"],
