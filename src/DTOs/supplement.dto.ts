@@ -5,7 +5,8 @@ export const CreateSupplementSchema = z.object({
   description: z.string().min(10, 'Description must be at least 10 characters'),
   price: z.number().positive('Price must be positive'),
   stock: z.number().nonnegative('Stock cannot be negative'),
-  image: z.string().optional(),
+  imageUrl: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
 });
 export const UpdateSupplementSchema = CreateSupplementSchema.partial();
 export type CreateSupplementDTO = z.infer<typeof CreateSupplementSchema>;
