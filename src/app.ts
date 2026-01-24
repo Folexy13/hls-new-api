@@ -20,7 +20,8 @@ app.use(
   cors({
     origin: [
       "https://www.hlsnigeria.com",
-      "https://hlsnigeria.com"
+      "https://hlsnigeria.com",
+      "http://localhost:3001"
     ], // or an array of allowed origins
 
     methods: ["GET", "POST", "PUT", "DELETE"],

@@ -185,6 +185,42 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
+  // Alias for updateStock - decrements stock by quantity
+  async decrementStock(id: number, quantity: number): Promise<Supplement> {
+    return this.updateStock(id, quantity);
+  }
+
+  // Increment stock (for returns/restocking)
+  async incrementStock(id: number, quantity: number): Promise<Supplement> {
+    return this.prisma.supplement.update({
+      where: { id },
+      data: {
+        stock: {
+          increment: quantity
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+  }
+
+  // Check if sufficient stock is available
+  async hasStock(id: number, quantity: number): Promise<boolean> {
+    const supplement = await this.prisma.supplement.findUnique({
+      where: { id },
+      select: { stock: true }
+    });
+    return supplement ? supplement.stock >= quantity : false;
+  }
+
   async isInCart(id: number): Promise<boolean> {
     const cartItems = await this.prisma.cartItem.findMany({
       where: { supplementId: id }

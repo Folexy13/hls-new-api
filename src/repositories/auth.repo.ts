@@ -14,7 +14,8 @@ export default class AuthRepositoryImpl implements AuthRepository {
         email: data.email,
         password: data.password, // Note: Password should be hashed before storage
         firstName: data.firstName,
-        lastName: data.lastName
+        lastName: data.lastName,
+        role: data.role || 'benfek'
       }
     });
   }

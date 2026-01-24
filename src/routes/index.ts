@@ -7,7 +7,8 @@ import { createCartRoutes } from './cart.routes';
 import { createSupplementRoutes } from './supplement.routes';
 import { createPodcastRoutes } from './podcast.routes';
 import { createPaystackRoutes } from './paystack.routes';
-import { createNutrientTypeRoutes  } from './nutrienttype.routes';
+import { createNutrientTypeRoutes } from './nutrienttype.routes';
+import { createQuizCodeRoutes } from './quizcode.routes';
 
 export const createRoutes = (container: Container): Router => {
   const router = Router();
@@ -34,6 +35,8 @@ export const createRoutes = (container: Container): Router => {
   router.use('/paystack', createPaystackRoutes(container));
   //mount quiz/nutrient route
   router.use('/nutrient-types', createNutrientTypeRoutes(container));
+  // Mount quiz code routes
+  router.use('/quiz-code', createQuizCodeRoutes(container));
 
   return router;
 };

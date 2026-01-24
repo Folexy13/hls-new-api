@@ -1,6 +1,6 @@
 import { Request } from 'express';
 
-export type Role = 'benfek' | 'principal' | 'pharmacy' | 'researcher';
+export type Role = 'benfek' | 'principal' | 'pharmacy' | 'researcher' | 'wholesaler';
 
 export interface AuthenticatedRequest extends Request {
   user: {

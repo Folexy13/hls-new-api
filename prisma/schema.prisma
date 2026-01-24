@@ -34,6 +34,7 @@ model User {
   wallet        Wallet?
   withdrawals   Withdrawal[]
   nutrient      NutrientType?  // One-to-one relation, no fields/references here
+  quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -59,17 +60,19 @@ model Podcast {
 }
 
 model Supplement {
-  id          Int      @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   name        String
   description String
   price       Float
   stock       Int
+  imageUrl    String?     // Product image URL
+  category    String?     // Product category
   userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   cartItems   CartItem[]
   orderItems  OrderItem[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Cart {
@@ -84,6 +87,7 @@ model Cart {
 model CartItem {
   id           Int        @id @default(autoincrement())
   quantity     Int
+  priceAtAdd   Float?     // Price snapshot when item was added to cart
   cartId       Int
   cart         Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
   supplementId Int
@@ -93,41 +97,50 @@ model CartItem {
 }
 
 model Order {
-  id         Int         @id @default(autoincrement())
-  userId     Int
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items      OrderItem[]
-  payment    Payment?
-  status     String      @default("pending")
-  total      Float
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id              Int         @id @default(autoincrement())
+  orderNumber     String      @unique @default(uuid()) // Human-readable order reference
+  userId          Int
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+  payment         Payment?
+  status          String      @default("pending") // pending, paid, processing, shipped, delivered, cancelled
+  total           Float       // Total price of the order
+  totalQuantity   Int         @default(0) // Total number of items in the order
+  shippingAddress String?     @db.Text
+  notes           String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model OrderItem {
-  id           Int        @id @default(autoincrement())
-  quantity     Int
-  price       Float
-  orderId      Int
-  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  supplementId Int
-  supplement   Supplement @relation(fields: [supplementId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id             Int        @id @default(autoincrement())
+  quantity       Int
+  price          Float      // Price at time of order
+  productName    String?    // Snapshot of product name
+  orderId        Int
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplementId   Int
+  supplement     Supplement @relation(fields: [supplementId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model Payment {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orderId     Int      @unique
-  order       Order    @relation(fields: [orderId], references: [id])
-  amount      Float
-  method      String
-  status      String   @default("pending")
-  transaction String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId           Int       @unique
+  order             Order     @relation(fields: [orderId], references: [id])
+  amount            Float
+  method            String    // paystack, bank_transfer, cash, etc.
+  status            String    @default("pending") // pending, success, failed, refunded
+  paystackReference String?   @unique // Paystack transaction reference
+  paystackChannel   String?   // card, bank, ussd, qr, mobile_money, etc.
+  currency          String    @default("NGN")
+  paidAt            DateTime?
+  metadata          String?   @db.Text // JSON string for additional payment data
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model Inbox {
@@ -217,5 +230,29 @@ model Preference {
   maxBudget   Float
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+// Quiz codes for benfek registration - created by Principal when adding a benfek
+model QuizCode {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique
+  isUsed            Boolean   @default(false)
+  usedBy            Int?      // User ID who used this code (benfek)
+  usedAt            DateTime?
+  expiresAt         DateTime? // Optional expiration date
+  createdBy         Int       // Principal who created this code
+  creator           User      @relation("QuizCodeCreator", fields: [createdBy], references: [id])
+  
+  // Benfek data filled by Principal
+  benfekName        String
+  benfekPhone       String
+  allergies         String?   @db.Text
+  scares            String?   @db.Text  // Health issues that scare them
+  familyCondition   String?   @db.Text  // Family's notable health condition
+  medications       String?   @db.Text  // Current medications
+  hasCurrentCondition Boolean @default(false)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 

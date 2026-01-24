@@ -1,16 +1,18 @@
 import { z } from 'zod';
 
 export const RegisterUserSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().email('Invalid email format').transform(val => val.trim()),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/,
+    .transform(val => val.trim())
+    .refine(val => val.length >= 8, 'Password must be at least 8 characters')
+    .refine(
+      val => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])/.test(val),
       'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
     ),
-  firstName: z.string().min(2, 'First name must be at least 2 characters'),
-  lastName: z.string().min(2, 'Last name must be at least 2 characters')
+  firstName: z.string().min(2, 'First name must be at least 2 characters').transform(val => val.trim()),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters').transform(val => val.trim()),
+  role: z.enum(['benfek', 'principal', 'wholesaler', 'pharmacy', 'researcher']).optional().default('benfek')
 });
 
 export const LoginUserSchema = z.object({

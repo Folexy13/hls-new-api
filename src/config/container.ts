@@ -27,6 +27,9 @@ import { SupplementService } from '../services/supplement.service';
 import { SupplementController } from '../controllers/supplement.controller';
 import { PaystackRepository } from '../repositories/paystack.repository';
 import { PaystackController } from '../controllers/paystack.controller';
+import { OrderRepository } from '../repositories/order.repository';
+import { QuizCodeRepository } from '../repositories/quizcode.repository';
+import { QuizCodeController } from '../controllers/quizcode.controller';
 
 const container = new Container();
 
@@ -46,6 +49,8 @@ container.bind<PodcastRepository>(PodcastRepository).toSelf();
 container.bind<CartRepository>(CartRepository).toSelf();
 container.bind<SupplementRepository>(SupplementRepository).toSelf();
 container.bind<PaystackRepository>(PaystackRepository).toSelf();
+container.bind<OrderRepository>(OrderRepository).toSelf();
+container.bind<QuizCodeRepository>(QuizCodeRepository).toSelf();
 
 // Bind utilities
 container.bind<ResponseUtil>(ResponseUtil).toSelf();
@@ -69,5 +74,6 @@ container.bind<PodcastController>(PodcastController).toSelf();
 container.bind<CartController>(CartController).toSelf();
 container.bind<SupplementController>(SupplementController).toSelf();
 container.bind<PaystackController>(PaystackController).toSelf();
+container.bind<QuizCodeController>(QuizCodeController).toSelf();
 
 export { container };
