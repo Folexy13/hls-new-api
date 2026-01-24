@@ -22,7 +22,12 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
   }
 
   async create(userId: number, data: CreateSupplementDTO): Promise<Supplement> {
-    return this.supplementRepository.create({ ...data, userId });
+    return this.supplementRepository.create({
+      ...data,
+      userId,
+      imageUrl: data.imageUrl ?? null,
+      category: data.category ?? null,
+    });
   }
 
   async update(id: number, userId: number, data: UpdateSupplementDTO): Promise<Supplement> {
