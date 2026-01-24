@@ -9,6 +9,8 @@ interface Supplement {
   description: string;
   price: number;
   stock: number;
+  imageUrl: string | null;
+  category: string | null;
   userId: number;
   user?: {
     id: number;
@@ -22,10 +24,12 @@ interface Supplement {
 
 @injectable()
 export class SupplementRepository implements IRepository<Supplement> {
-  constructor(@inject('PrismaClient') private prisma: PrismaClient) {}  async findAll(skip?: number, take?: number): Promise<{ items: Supplement[]; total: number }> {
+  constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
+  
+  async findAll(skip?: number, take?: number): Promise<{ items: Supplement[]; total: number }> {
     // Using raw queries to avoid Prisma model type issues
     const supplements = await this.prisma.$queryRaw`
-      SELECT s.id, s.name, s.description, s.price, s.stock, s.userId, 
+      SELECT s.id, s.name, s.description, s.price, s.stock, s.imageUrl, s.category, s.userId,
              s.createdAt, s.updatedAt,
              u.id as 'user.id', u.firstName as 'user.firstName',
              u.lastName as 'user.lastName', u.email as 'user.email'
@@ -40,12 +44,14 @@ export class SupplementRepository implements IRepository<Supplement> {
     ` as Array<{ count: number }>;
 
     // Transform the flat results into nested objects
-    const transformedSupplements = supplements.map(supplement => ({
+    const transformedSupplements: Supplement[] = supplements.map(supplement => ({
       id: supplement.id,
       name: supplement.name,
       description: supplement.description,
       price: supplement.price,
       stock: supplement.stock,
+      imageUrl: supplement.imageUrl || null,
+      category: supplement.category || null,
       userId: supplement.userId,
       createdAt: supplement.createdAt,
       updatedAt: supplement.updatedAt,
@@ -57,9 +63,9 @@ export class SupplementRepository implements IRepository<Supplement> {
       }
     }));
 
-    return { 
-      items: transformedSupplements, 
-      total: totalResult[0].count 
+    return {
+      items: transformedSupplements,
+      total: totalResult[0].count
     };
   }
 

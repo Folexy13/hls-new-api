@@ -4,7 +4,6 @@ import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
-import { AuthenticatedRequest } from '../types/auth.types';
 import { z } from 'zod';
 
 // Validation schemas
@@ -73,17 +72,20 @@ export class QuizCodeController extends BaseController {
    *       403:
    *         description: Forbidden - Only principals can create quiz codes
    */
-  createQuizCode: RequestHandler = async (req: AuthenticatedRequest, res: Response) => {
+  createQuizCode: RequestHandler = async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user;
+      
       // Check if user is a principal
-      if (req.user.role !== 'principal') {
-        return ResponseUtil.error(res, 'Only principals can create quiz codes', 403);
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can create quiz codes', 403);
+        return;
       }
 
       const data = CreateQuizCodeSchema.parse(req.body);
       
       const quizCode = await this.quizCodeRepository.create({
-        createdBy: req.user.id,
+        createdBy: user.id,
         benfekName: data.benfekName,
         benfekPhone: data.benfekPhone,
         allergies: data.allergies,
@@ -96,7 +98,8 @@ export class QuizCodeController extends BaseController {
       ResponseUtil.success(res, quizCode, 'Quiz code created successfully', 201);
     } catch (error: any) {
       if (error.name === 'ZodError') {
-        return ResponseUtil.error(res, 'Validation failed', 400, error);
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
       }
       ResponseUtil.error(res, 'Failed to create quiz code', 500, error);
     }
@@ -132,7 +135,8 @@ export class QuizCodeController extends BaseController {
       const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
       
       if (!result.valid) {
-        return ResponseUtil.error(res, result.message, 400);
+        ResponseUtil.error(res, result.message, 400);
+        return;
       }
 
       // Return quiz code data (without sensitive info)
@@ -149,7 +153,8 @@ export class QuizCodeController extends BaseController {
       ResponseUtil.success(res, { valid: true, quizCode: quizCodeData }, result.message);
     } catch (error: any) {
       if (error.name === 'ZodError') {
-        return ResponseUtil.error(res, 'Validation failed', 400, error);
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
       }
       ResponseUtil.error(res, 'Failed to validate quiz code', 500, error);
     }
@@ -182,17 +187,20 @@ export class QuizCodeController extends BaseController {
    *       403:
    *         description: Forbidden - Only principals can view their codes
    */
-  getMyQuizCodes: RequestHandler = async (req: AuthenticatedRequest, res: Response) => {
+  getMyQuizCodes: RequestHandler = async (req: Request, res: Response) => {
     try {
-      if (req.user.role !== 'principal') {
-        return ResponseUtil.error(res, 'Only principals can view quiz codes', 403);
+      const user = (req as any).user;
+      
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can view quiz codes', 403);
+        return;
       }
 
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
 
-      const result = await this.quizCodeRepository.findByCreator(req.user.id, skip, limit);
+      const result = await this.quizCodeRepository.findByCreator(user.id, skip, limit);
 
       ResponseUtil.success(res, {
         codes: result.codes,
@@ -232,10 +240,13 @@ export class QuizCodeController extends BaseController {
    *       404:
    *         description: Quiz code not found
    */
-  deleteQuizCode: RequestHandler = async (req: AuthenticatedRequest, res: Response) => {
+  deleteQuizCode: RequestHandler = async (req: Request, res: Response) => {
     try {
-      if (req.user.role !== 'principal') {
-        return ResponseUtil.error(res, 'Only principals can delete quiz codes', 403);
+      const user = (req as any).user;
+      
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can delete quiz codes', 403);
+        return;
       }
 
       const id = parseInt(req.params.id);
