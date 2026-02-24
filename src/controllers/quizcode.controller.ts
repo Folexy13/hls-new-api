@@ -4,22 +4,7 @@ import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
-import { z } from 'zod';
-
-// Validation schemas
-const CreateQuizCodeSchema = z.object({
-  benfekName: z.string().min(1, 'Benfek name is required'),
-  benfekPhone: z.string().min(1, 'Benfek phone is required'),
-  allergies: z.string().optional(),
-  scares: z.string().optional(),
-  familyCondition: z.string().optional(),
-  medications: z.string().optional(),
-  hasCurrentCondition: z.boolean().optional(),
-});
-
-const ValidateCodeSchema = z.object({
-  code: z.string().min(1, 'Quiz code is required'),
-});
+import { CreateQuizCodeSchema, ValidateQuizCodeSchema } from '../DTOs/quiz.dto';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -130,7 +115,7 @@ export class QuizCodeController extends BaseController {
    */
   validateQuizCode: RequestHandler = async (req: Request, res: Response) => {
     try {
-      const { code } = ValidateCodeSchema.parse(req.body);
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
       
       const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
       
