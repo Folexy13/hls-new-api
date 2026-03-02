@@ -1,0 +1,191 @@
+classDiagram
+  class User {
+    +int id
+    +string email
+    +string password
+    +string firstName
+    +string lastName
+    +string phone
+    +Role role
+  }
+
+  class Supplement {
+    +int id
+    +string name
+    +string description
+    +float price
+    +int stock
+    +string imageUrl
+    +string category
+  }
+
+  class Cart {
+    +int id
+  }
+
+  class CartItem {
+    +int id
+    +int quantity
+    +float priceAtAdd
+  }
+
+  class Order {
+    +int id
+    +string orderNumber
+    +string status
+    +float total
+    +int totalQuantity
+    +string shippingAddress
+    +string notes
+  }
+
+  class OrderItem {
+    +int id
+    +int quantity
+    +float price
+    +string productName
+  }
+
+  class Payment {
+    +int id
+    +float amount
+    +string method
+    +string status
+    +string paystackReference
+    +string paystackChannel
+    +string currency
+    +Date paidAt
+  }
+
+  class Wallet {
+    +int id
+    +float balance
+  }
+
+  class Withdrawal {
+    +int id
+    +float amount
+    +string bankName
+    +string accountNumber
+    +string accountName
+    +int month
+    +int year
+    +string status
+  }
+
+  class Podcast {
+    +int id
+    +string title
+    +string description
+    +string audioUrl
+  }
+
+  class NutrientType {
+    +int id
+    +string code
+  }
+
+  class Basic {
+    +int id
+    +string gender
+    +string nickname
+    +string age
+    +string weight
+    +string height
+  }
+
+  class Lifestyle {
+    +int id
+    +string habit
+    +string fun
+    +string routine
+    +string career
+  }
+
+  class Preference {
+    +int id
+    +string drugForm
+    +float minBudget
+    +float maxBudget
+  }
+
+  class QuizCode {
+    +int id
+    +string code
+    +string benfekName
+    +string benfekPhone
+    +boolean isUsed
+  }
+
+  %% DTOs
+  class CreateSupplementDTO
+  class UpdateSupplementDTO
+  class CreateProductDTO
+  class UpdateProductDTO
+  class AddToCartDTO
+  class UpdateCartItemDTO
+  class CreatePodcastDTO
+  class UpdatePodcastDTO
+  class CreatePaymentDTO
+  class WithdrawalDTO
+  class CreateQuizCodeDTO
+  class ValidateQuizCodeDTO
+  class CheckoutFromCartDTO
+  class VerifyTransactionDTO
+  class CreateWholesalerProfileDTO
+  class UpdateWholesalerProfileDTO
+  class CreateResearcherProfileDTO
+  class UpdateResearcherProfileDTO
+  class CreatePrincipalProfileDTO
+  class UpdatePrincipalProfileDTO
+  class CreateBenfekProfileDTO
+  class UpdateBenfekProfileDTO
+
+  User "1" --> "*" Podcast
+  User "1" --> "*" Supplement
+  User "1" --> "*" Cart
+  Cart "1" --> "*" CartItem
+  Supplement "1" --> "*" CartItem
+  User "1" --> "*" Order
+  Order "1" --> "*" OrderItem
+  Supplement "1" --> "*" OrderItem
+  Order "1" --> "1" Payment
+  User "1" --> "1" Wallet
+  Wallet "1" --> "*" Withdrawal
+  User "1" --> "1" NutrientType
+  NutrientType "1" --> "1" Basic
+  NutrientType "1" --> "1" Lifestyle
+  NutrientType "1" --> "1" Preference
+  User "1" --> "*" QuizCode
+
+  CreateSupplementDTO ..> Supplement
+  UpdateSupplementDTO ..> Supplement
+  CreateProductDTO ..> Supplement
+  UpdateProductDTO ..> Supplement
+  AddToCartDTO ..> CartItem
+  UpdateCartItemDTO ..> CartItem
+  CreatePodcastDTO ..> Podcast
+  UpdatePodcastDTO ..> Podcast
+  CreatePaymentDTO ..> Payment
+  WithdrawalDTO ..> Withdrawal
+  CreateQuizCodeDTO ..> QuizCode
+  ValidateQuizCodeDTO ..> QuizCode
+  CheckoutFromCartDTO ..> Order
+  VerifyTransactionDTO ..> Payment
+
+  CreateWholesalerProfileDTO ..> User
+  UpdateWholesalerProfileDTO ..> User
+  CreateResearcherProfileDTO ..> User
+  UpdateResearcherProfileDTO ..> User
+  CreatePrincipalProfileDTO ..> User
+  UpdatePrincipalProfileDTO ..> User
+  CreateBenfekProfileDTO ..> User
+  UpdateBenfekProfileDTO ..> User
+  CreateBenfekProfileDTO ..> QuizCode
+  UpdateBenfekProfileDTO ..> QuizCode
+  CreateBenfekProfileDTO ..> Basic
+  CreateBenfekProfileDTO ..> Lifestyle
+  CreateBenfekProfileDTO ..> Preference
+  UpdateBenfekProfileDTO ..> Basic
+  UpdateBenfekProfileDTO ..> Lifestyle
+  UpdateBenfekProfileDTO ..> Preference
