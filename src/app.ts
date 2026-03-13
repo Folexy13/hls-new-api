@@ -8,7 +8,7 @@ import { createRoutes } from "./routes";
 import cors from "cors"; // Fixed the import statement
 import cron from "node-cron";
 import axios from "axios";
-
+import 'dotenv/config'
 const PORT = process.env.PORT || 3000;
 
 const app = express();

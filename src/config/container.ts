@@ -1,5 +1,3 @@
-
-
 import { NutrientTypeRepository } from '../repositories/nutrienttype.repository';
 import { NutrientTypeService } from '../services/nutrienttype.service';
 import { NutrientTypeController } from '../controllers/nutrienttype.controller';
@@ -30,6 +28,9 @@ import { PaystackController } from '../controllers/paystack.controller';
 import { OrderRepository } from '../repositories/order.repository';
 import { QuizCodeRepository } from '../repositories/quizcode.repository';
 import { QuizCodeController } from '../controllers/quizcode.controller';
+import { PrincipalRepository } from '../repositories/principal.repository';
+import { PrincipalService } from '../services/principal.service';
+import { PrincipalController } from '../controllers/principal.controller';
 
 const container = new Container();
 
@@ -51,6 +52,7 @@ container.bind<SupplementRepository>(SupplementRepository).toSelf();
 container.bind<PaystackRepository>(PaystackRepository).toSelf();
 container.bind<OrderRepository>(OrderRepository).toSelf();
 container.bind<QuizCodeRepository>(QuizCodeRepository).toSelf();
+container.bind<PrincipalRepository>(PrincipalRepository).toSelf();
 
 // Bind utilities
 container.bind<ResponseUtil>(ResponseUtil).toSelf();
@@ -64,6 +66,7 @@ container.bind<WalletService>(WalletService).toSelf();
 container.bind<PodcastService>(PodcastService).toSelf();
 container.bind<CartService>(CartService).toSelf();
 container.bind<SupplementService>(SupplementService).toSelf();
+container.bind<PrincipalService>(PrincipalService).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();
@@ -75,5 +78,6 @@ container.bind<CartController>(CartController).toSelf();
 container.bind<SupplementController>(SupplementController).toSelf();
 container.bind<PaystackController>(PaystackController).toSelf();
 container.bind<QuizCodeController>(QuizCodeController).toSelf();
+container.bind<PrincipalController>(PrincipalController).toSelf();
 
 export { container };

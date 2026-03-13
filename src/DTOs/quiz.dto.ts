@@ -14,5 +14,10 @@ export const ValidateQuizCodeSchema = z.object({
   code: z.string().min(1, 'Quiz code is required'),
 });
 
+export const UseQuizCodeSchema = z.object({
+  code: z.string().min(1, 'Quiz code is required'),
+});
+
 export type CreateQuizCodeDTO = z.infer<typeof CreateQuizCodeSchema>;
 export type ValidateQuizCodeDTO = z.infer<typeof ValidateQuizCodeSchema>;
+export type UseQuizCodeDTO = z.infer<typeof UseQuizCodeSchema>;

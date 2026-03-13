@@ -3,6 +3,7 @@ import { injectable } from "inversify";
 import { verify } from "jsonwebtoken";
 import { ResponseUtil } from "../utilities/response.utility";
 import type { AuthenticatedRequest, Role } from "../types/auth.types";
+import "dotenv/config"
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 

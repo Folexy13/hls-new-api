@@ -4,7 +4,7 @@ import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
-import { CreateQuizCodeSchema, ValidateQuizCodeSchema } from '../DTOs/quiz.dto';
+import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema } from '../DTOs/quiz.dto';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -147,6 +147,60 @@ export class QuizCodeController extends BaseController {
 
   /**
    * @swagger
+   * /api/v2/quiz-code/use:
+   *   post:
+   *     summary: Use a quiz code (Benfek only)
+   *     tags: [QuizCode]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Quiz code used successfully
+   *       400:
+   *         description: Validation error
+   *       403:
+   *         description: Forbidden - Only benfeks can use quiz codes
+   */
+  useQuizCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'benfek') {
+        ResponseUtil.error(res, 'Only benfeks can use quiz codes', 403);
+        return;
+      }
+
+      const { code } = UseQuizCodeSchema.parse(req.body);
+      const validation = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!validation.valid) {
+        ResponseUtil.error(res, validation.message, 400);
+        return;
+      }
+
+      const updated = await this.quizCodeRepository.markAsUsed(code.toUpperCase(), user.id);
+      ResponseUtil.success(res, updated, 'Quiz code used successfully');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to use quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
    * /api/v2/quiz-code/my-codes:
    *   get:
    *     summary: Get quiz codes created by the current principal
@@ -198,6 +252,117 @@ export class QuizCodeController extends BaseController {
       }, 'Quiz codes retrieved successfully');
     } catch (error: any) {
       ResponseUtil.error(res, 'Failed to retrieve quiz codes', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/benfeks:
+   *   get:
+   *     summary: Get benfeks created by the current principal (with optional name search)
+   *     tags: [QuizCode]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: name
+   *         schema:
+   *           type: string
+   *         description: Benfek name search (partial match)
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *         description: Page number
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *         description: Items per page
+   *     responses:
+   *       200:
+   *         description: List of benfeks
+   *       403:
+   *         description: Forbidden - Only principals can view benfeks
+   */
+  getMyBenfeks: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can view benfeks', 403);
+        return;
+      }
+
+      const name = (req.query.name as string) || (req.query.benfekName as string) || undefined;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
+      const result = await this.quizCodeRepository.findBenfeksByCreator(user.id, name, skip, limit);
+
+      const benfeks = result.codes.map(code => ({
+        id: code.id,
+        code: code.code,
+        benfekName: code.benfekName,
+        benfekPhone: code.benfekPhone,
+        registrationStatus: code.isUsed ? 'registered' : 'not_registered',
+        usedAt: code.usedAt,
+      }));
+
+      ResponseUtil.success(res, {
+        benfeks,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
+      }, 'Benfeks retrieved successfully');
+    } catch (error: any) {
+      ResponseUtil.error(res, 'Failed to retrieve benfeks', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/benfeks/{code}:
+   *   get:
+   *     summary: Get quiz data for a benfek by code
+   *     tags: [QuizCode]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: code
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Quiz data retrieved
+   *       403:
+   *         description: Forbidden - Only principals can view benfek quiz data
+   *       404:
+   *         description: Quiz code not found
+   */
+  getBenfekQuizByCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can view benfek quiz data', 403);
+        return;
+      }
+
+      const code = (req.params.code || '').toUpperCase();
+      const quizCode = await this.quizCodeRepository.findByCode(code);
+      if (!quizCode || quizCode.createdBy !== user.id) {
+        ResponseUtil.error(res, 'Quiz code not found', 404);
+        return;
+      }
+
+      ResponseUtil.success(res, quizCode, 'Quiz data retrieved successfully');
+    } catch (error: any) {
+      ResponseUtil.error(res, 'Failed to retrieve quiz data', 500, error);
     }
   };
 
