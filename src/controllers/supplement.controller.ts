@@ -172,6 +172,8 @@ export class SupplementController extends BaseController {
       const isPrincipal = req.user.role === 'principal';
       const filterUserId = isPrincipal ? req.user.id : undefined;
       
+      console.log('Filtering supplements for principal:', { isPrincipal, userId: req.user.id, filterUserId });
+      
       const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
       
       return ResponseUtil.success(res, { 
