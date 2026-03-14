@@ -3,9 +3,7 @@ import { injectable } from "inversify";
 import { verify } from "jsonwebtoken";
 import { ResponseUtil } from "../utilities/response.utility";
 import type { AuthenticatedRequest, Role } from "../types/auth.types";
-import "dotenv/config"
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+import { config } from "../config/config";
 
 @injectable()
 export class AuthGuard {
@@ -27,11 +25,12 @@ export class AuthGuard {
           ResponseUtil.error(res, "Invalid token format", 401);
           return;
         }
-        const decoded = verify(token, JWT_SECRET) as {
+        const decoded = verify(token, config.jwtSecret) as {
           userId: number;
           role: string;
           email: string;
         };
+        console.log('Token verified successfully for user:', decoded.userId);
         (req as AuthenticatedRequest).user = {
           id: decoded.userId,
           role: decoded.role as Role,
@@ -40,6 +39,8 @@ export class AuthGuard {
 
         next();
       } catch (error) {
+        console.error('JWT Verification failed:', (error as Error).message);
+        console.error('Used Secret (first 4 chars):', config.jwtSecret.substring(0, 4));
         ResponseUtil.error(res, "Invalid token", 401);
         return;
       }

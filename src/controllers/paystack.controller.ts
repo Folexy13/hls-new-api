@@ -160,7 +160,7 @@ export class PaystackController extends BaseController {
       }
 
       // Check if payment already processed
-      const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference);
+      const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference as string);
       if (existingPayment) {
         return res.status(200).json({ 
           message: 'Payment already processed.',
@@ -168,7 +168,7 @@ export class PaystackController extends BaseController {
         });
       }
 
-      const result = await PaystackService.verifyTransaction(reference);
+      const result = await PaystackService.verifyTransaction(reference as string);
       const userId = req.user.id;
 
       if (result.data.status === 'success') {
@@ -189,7 +189,7 @@ export class PaystackController extends BaseController {
           amount: result.data.amount / 100, // Convert from kobo to naira
           method: 'paystack',
           status: 'success',
-          paystackReference: reference,
+          paystackReference: reference as string,
           paystackChannel: result.data.channel,
           currency: result.data.currency,
           paidAt: new Date(result.data.paid_at),

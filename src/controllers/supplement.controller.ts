@@ -7,6 +7,7 @@ import { Container } from 'inversify';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { CreateSupplementSchema, UpdateSupplementSchema } from '../DTOs/supplement.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
+import { cloudinaryService } from '../utilities/cloudinary.utility';
 
 /**
  * @swagger
@@ -166,7 +167,14 @@ export class SupplementController extends BaseController {
       const { page = 1, limit = 10 } = req.query;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
-      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum);
+      
+      // Filter by userId if principal
+      const isPrincipal = req.user.role === 'principal';
+      const filterUserId = isPrincipal ? req.user.id : undefined;
+      
+      console.log('Filtering supplements for principal:', { isPrincipal, userId: req.user.id, filterUserId });
+      
+      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
       
       return ResponseUtil.success(res, { 
         supplements,
@@ -204,7 +212,7 @@ export class SupplementController extends BaseController {
    */
   async getSupplementById(req: AuthenticatedRequest, res: Response) {
     try {
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       const supplement = await this.supplementService.findById(supplementId);
       
       if (!supplement) {
@@ -324,7 +332,7 @@ export class SupplementController extends BaseController {
   async updateSupplement(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       const data = UpdateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.update(supplementId, req.user.id, data);
       return ResponseUtil.success(res, { supplement });
@@ -356,7 +364,7 @@ export class SupplementController extends BaseController {
   async deleteSupplement(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       await this.supplementService.delete(supplementId, req.user.id);
       return ResponseUtil.success(res, null, 'Supplement deleted successfully');
     } catch (error) {
@@ -402,6 +410,116 @@ export class SupplementController extends BaseController {
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
       return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/supplements/upload-image:
+   *   post:
+   *     tags: [Supplements]
+   *     summary: Upload an image for a supplement
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               image:
+   *                 type: string
+   *                 format: binary
+   *                 description: Image file to upload
+   *     responses:
+   *       200:
+   *         description: Image uploaded successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 imageUrl:
+   *                   type: string
+   *                 publicId:
+   *                   type: string
+   *       400:
+   *         description: No image file provided
+   *       403:
+   *         description: Only principals can upload images
+   */
+  async uploadImage(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+
+      if (!req.file) {
+        return ResponseUtil.error(res, 'No image file provided', 400);
+      }
+
+      const result = await cloudinaryService.uploadFile(req.file, 'supplements');
+      
+      return ResponseUtil.success(res, {
+        imageUrl: result.url,
+        publicId: result.publicId,
+      }, 'Image uploaded successfully');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/supplements/upload-image-base64:
+   *   post:
+   *     tags: [Supplements]
+   *     summary: Upload a base64 encoded image for a supplement
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               image:
+   *                 type: string
+   *                 description: Base64 encoded image data
+   *     responses:
+   *       200:
+   *         description: Image uploaded successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 imageUrl:
+   *                   type: string
+   *                 publicId:
+   *                   type: string
+   *       400:
+   *         description: No image data provided
+   *       403:
+   *         description: Only principals can upload images
+   */
+  async uploadImageBase64(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+
+      const { image } = req.body;
+      if (!image) {
+        return ResponseUtil.error(res, 'No image data provided', 400);
+      }
+
+      const result = await cloudinaryService.uploadBase64(image, 'supplements');
+      
+      return ResponseUtil.success(res, {
+        imageUrl: result.url,
+        publicId: result.publicId,
+      }, 'Image uploaded successfully');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message);
     }
   }
 }

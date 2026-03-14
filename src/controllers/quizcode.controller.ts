@@ -307,6 +307,12 @@ export class QuizCodeController extends BaseController {
         benfekPhone: code.benfekPhone,
         registrationStatus: code.isUsed ? 'registered' : 'not_registered',
         usedAt: code.usedAt,
+        createdAt: code.createdAt,
+        allergies: code.allergies,
+        scares: code.scares,
+        familyCondition: code.familyCondition,
+        medications: code.medications,
+        hasCurrentCondition: code.hasCurrentCondition,
       }));
 
       ResponseUtil.success(res, {
@@ -353,7 +359,7 @@ export class QuizCodeController extends BaseController {
         return;
       }
 
-      const code = (req.params.code || '').toUpperCase();
+      const code = ((req.params.code as string) || '').toUpperCase();
       const quizCode = await this.quizCodeRepository.findByCode(code);
       if (!quizCode || quizCode.createdBy !== user.id) {
         ResponseUtil.error(res, 'Quiz code not found', 404);
@@ -399,7 +405,7 @@ export class QuizCodeController extends BaseController {
         return;
       }
 
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as any);
       
       await this.quizCodeRepository.delete(id);
 

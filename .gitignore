@@ -4,3 +4,6 @@ node_modules
 
 /generated/prisma
 .qodo
+package-lock.json
+yarn.lock
+dist
