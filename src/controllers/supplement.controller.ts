@@ -118,6 +118,14 @@ export class SupplementController extends BaseController {
     this.supplementService = container.get(SupplementService);
   }
 
+  private ensurePrincipalRole(req: AuthenticatedRequest, res: Response): boolean {
+    if (req.user.role !== 'principal') {
+      ResponseUtil.error(res, 'Only principals can manage supplements', 403);
+      return false;
+    }
+    return true;
+  }
+
   /**
    * @swagger
    * /api/v2/supplements:
@@ -232,6 +240,7 @@ export class SupplementController extends BaseController {
    */
   async getUserSupplements(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!this.ensurePrincipalRole(req, res)) return;
       const supplements = await this.supplementService.findByUserId(req.user.id);
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
@@ -268,6 +277,7 @@ export class SupplementController extends BaseController {
    */
   async createSupplement(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!this.ensurePrincipalRole(req, res)) return;
       const data = CreateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.create(req.user.id, data);
       return ResponseUtil.success(res, { supplement }, 'Supplement created successfully', 201);
@@ -313,6 +323,7 @@ export class SupplementController extends BaseController {
  */
   async updateSupplement(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!this.ensurePrincipalRole(req, res)) return;
       const supplementId = parseInt(req.params.id);
       const data = UpdateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.update(supplementId, req.user.id, data);
@@ -344,6 +355,7 @@ export class SupplementController extends BaseController {
    */
   async deleteSupplement(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!this.ensurePrincipalRole(req, res)) return;
       const supplementId = parseInt(req.params.id);
       await this.supplementService.delete(supplementId, req.user.id);
       return ResponseUtil.success(res, null, 'Supplement deleted successfully');

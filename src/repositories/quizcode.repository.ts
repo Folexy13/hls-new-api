@@ -141,6 +141,33 @@ export class QuizCodeRepository {
   }
 
   /**
+   * Get benfeks for a principal with optional name search
+   */
+  async findBenfeksByCreator(
+    createdBy: number,
+    benfekName?: string,
+    skip?: number,
+    take?: number
+  ): Promise<{ codes: QuizCode[]; total: number }> {
+    const where: any = { createdBy };
+    if (benfekName) {
+      where.benfekName = { contains: benfekName };
+    }
+
+    const [codes, total] = await Promise.all([
+      this.prisma.quizCode.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: skip || 0,
+        take: take || 50,
+      }),
+      this.prisma.quizCode.count({ where }),
+    ]);
+
+    return { codes, total };
+  }
+
+  /**
    * Get all quiz codes with pagination
    */
   async findAll(skip?: number, take?: number): Promise<{ codes: QuizCodeWithCreator[]; total: number }> {
