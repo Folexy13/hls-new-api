@@ -160,7 +160,7 @@ export class QuizCodeRepository {
         orderBy: { createdAt: 'desc' },
         skip: skip || 0,
         take: take || 50,
-      }),
+      }), 
       this.prisma.quizCode.count({ where }),
     ]);
 
