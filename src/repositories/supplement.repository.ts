@@ -27,45 +27,30 @@ export class SupplementRepository implements IRepository<Supplement> {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
   
   async findAll(skip?: number, take?: number): Promise<{ items: Supplement[]; total: number }> {
-    // Using raw queries to avoid Prisma model type issues
-    const supplements = await this.prisma.$queryRaw`
-      SELECT s.id, s.name, s.description, s.price, s.stock, s.imageUrl, s.category, s.userId,
-             s.createdAt, s.updatedAt,
-             u.id as 'user.id', u.firstName as 'user.firstName',
-             u.lastName as 'user.lastName', u.email as 'user.email'
-      FROM Supplement s
-      JOIN User u ON s.userId = u.id
-      ORDER BY s.createdAt DESC
-      LIMIT ${take || 50} OFFSET ${skip || 0}
-    ` as any[];
-
-    const totalResult = await this.prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM Supplement
-    ` as Array<{ count: number }>;
-
-    // Transform the flat results into nested objects
-    const transformedSupplements: Supplement[] = supplements.map(supplement => ({
-      id: supplement.id,
-      name: supplement.name,
-      description: supplement.description,
-      price: supplement.price,
-      stock: supplement.stock,
-      imageUrl: supplement.imageUrl || null,
-      category: supplement.category || null,
-      userId: supplement.userId,
-      createdAt: supplement.createdAt,
-      updatedAt: supplement.updatedAt,
-      user: {
-        id: supplement['user.id'],
-        firstName: supplement['user.firstName'],
-        lastName: supplement['user.lastName'],
-        email: supplement['user.email']
-      }
-    }));
+    const [supplements, total] = await Promise.all([
+      this.prisma.supplement.findMany({
+        skip: skip || 0,
+        take: take || 50,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }),
+      this.prisma.supplement.count()
+    ]);
 
     return {
-      items: transformedSupplements,
-      total: totalResult[0].count
+      items: supplements as any[],
+      total
     };
   }
 

@@ -1,8 +1,25 @@
 import { Router } from 'express';
 import { Container } from 'inversify';
+import multer from 'multer';
 import { SupplementController } from '../controllers/supplement.controller';
 import { AuthGuard } from '../middlewares/auth.guard';
 import { authenticatedHandler } from '../utilities/response.utility';
+
+// Configure multer for memory storage (for Cloudinary upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (_req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 
 export const createSupplementRoutes = (container: Container): Router => {
   const router = Router();
@@ -167,6 +184,60 @@ export const createSupplementRoutes = (container: Container): Router => {
   router.delete('/:id', 
     authGuard.verify(), 
     authenticatedHandler(supplementController.deleteSupplement.bind(supplementController))
+  );
+
+  /**
+   * @swagger
+   * /api/v2/supplements/upload-image:
+   *   post:
+   *     tags: [Supplements]
+   *     summary: Upload an image for a supplement
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               image:
+   *                 type: string
+   *                 format: binary
+   *     responses:
+   *       200:
+   *         description: Image uploaded successfully
+   */
+  router.post('/upload-image',
+    authGuard.verify(),
+    upload.single('image'),
+    authenticatedHandler(supplementController.uploadImage.bind(supplementController))
+  );
+
+  /**
+   * @swagger
+   * /api/v2/supplements/upload-image-base64:
+   *   post:
+   *     tags: [Supplements]
+   *     summary: Upload a base64 encoded image for a supplement
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               image:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Image uploaded successfully
+   */
+  router.post('/upload-image-base64',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.uploadImageBase64.bind(supplementController))
   );
 
   return router;
