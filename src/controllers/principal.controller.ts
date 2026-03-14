@@ -5,7 +5,7 @@ import { Container } from 'inversify';
 import { ResponseUtil } from '../utilities/response.utility';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { PrincipalService } from '../services/principal.service';
-import { CreateBenfekUserSchema, CreatePrincipalUserSchema, UpdatePrincipalUserSchema } from '../DTOs/principal.dto';
+import { CreateBenfekRecordSchema, CreatePrincipalUserSchema, UpdatePrincipalUserSchema } from '../DTOs/principal.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 
 @injectable()
@@ -40,13 +40,39 @@ export class PrincipalController extends BaseController {
   async createBenfek(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const data = CreateBenfekUserSchema.parse(req.body);
-      const benfek = await this.principalService.createBenfek(data);
-      return ResponseUtil.success(res, benfek, 'Benfek created successfully', 201);
+      
+      const data = CreateBenfekRecordSchema.parse(req.body);
+      // Change: Create a QuizCode instead of a direct User
+      // This allows the Benfek to use the code to register themselves later
+      const benfek = await this.principalService.createBenfekRecord(req.user.id, data);
+      
+      return ResponseUtil.success(res, benfek, 'Benfek created and Quiz Code generated successfully', 201);
     } catch (error) {
       const message = (error as Error).message || 'Failed to create benfek';
-      const status = message.toLowerCase().includes('exists') ? 409 : 500;
+      const status = (error as any).statusCode || 500;
       return ResponseUtil.error(res, message, status);
+    }
+  }
+
+  async getMyBenfeks(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const name = req.query.name as string;
+      
+      const { benfeks, total } = await this.principalService.getBenfeksByPrincipal(req.user.id, page, limit, name);
+      
+      return ResponseUtil.success(
+        res,
+        { benfeks },
+        'Benfeks retrieved successfully',
+        200,
+        { pagination: PaginationUtil.getPaginationMetadata(total, page, limit) }
+      );
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message);
     }
   }
 
@@ -107,7 +133,7 @@ export class PrincipalController extends BaseController {
   async getPrincipalById(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as any);
       const principal = await this.principalService.getPrincipalById(id);
       if (!principal) {
         return ResponseUtil.error(res, 'Principal not found', 404);
@@ -121,7 +147,7 @@ export class PrincipalController extends BaseController {
   async updatePrincipal(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as any);
       const data = UpdatePrincipalUserSchema.parse(req.body);
       const principal = await this.principalService.updatePrincipal(id, data);
       return ResponseUtil.success(res, principal, 'Principal updated successfully');
@@ -135,7 +161,7 @@ export class PrincipalController extends BaseController {
   async deletePrincipal(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as any);
       const principal = await this.principalService.deletePrincipal(id);
       return ResponseUtil.success(res, principal, 'Principal deleted successfully');
     } catch (error) {

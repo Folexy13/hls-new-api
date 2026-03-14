@@ -65,7 +65,7 @@ export class NutrientTypeController extends BaseController {
    *         description: Nutrient type not found
    */
   async getNutrientTypeById(req: Request, res: Response) {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as any);
     const nutrientType = await this.nutrientTypeService.findById(id);
     if (!nutrientType) return ResponseUtil.error(res, 'Nutrient type not found', 404);
     return ResponseUtil.success(res, nutrientType, 'Nutrient type retrieved');
@@ -156,7 +156,7 @@ export class NutrientTypeController extends BaseController {
    *         description: Nutrient type not found
    */
   async updateNutrientType(req: Request, res: Response) {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as any);
     const parse = UpdateNutrientTypeSchema.safeParse(req.body);
     if (!parse.success) return ResponseUtil.error(res, 'Validation error', 400, parse.error);
     const userId = (req as any).user.id;
@@ -185,7 +185,7 @@ export class NutrientTypeController extends BaseController {
    *         description: Nutrient type not found
    */
   async deleteNutrientType(req: Request, res: Response) {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as any);
     const userId = (req as any).user.id;
     await this.nutrientTypeService.delete(id, userId);
     return ResponseUtil.success(res, null, 'Nutrient type deleted');

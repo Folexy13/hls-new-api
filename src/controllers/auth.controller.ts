@@ -61,15 +61,15 @@ export class AuthController extends BaseController {
     try {
       const data = RegisterUserSchema.parse(req.body);
       const user = await this.authService.register(data);
-      ResponseUtil.success(res, user, 'User registered successfully', 201);
+      return ResponseUtil.success(res, user, 'User registered successfully', 201);
     } catch (error) {
       if (error instanceof ZodError) {
-        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
       }
       if (error instanceof AppError) {
-        ResponseUtil.error(res, error.message, error.statusCode, error);
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
-      ResponseUtil.error(res, 'Registration failed', 500, error);
+      return ResponseUtil.error(res, 'Registration failed', 500, error);
     }
   }
 
@@ -106,15 +106,15 @@ export class AuthController extends BaseController {
     try {
       const data = LoginUserSchema.parse(req.body);
       const result = await this.authService.login(data);
-      ResponseUtil.success(res, result, 'Login successful');
+      return ResponseUtil.success(res, result, 'Login successful');
     } catch (error) {
       if (error instanceof ZodError) {
-        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
       }
       if (error instanceof AppError) {
-        ResponseUtil.error(res, error.message, error.statusCode, error);
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
-      ResponseUtil.error(res, 'Login failed', 500, error);
+      return ResponseUtil.error(res, 'Login failed', 500, error);
     }
   }
 
@@ -145,15 +145,15 @@ export class AuthController extends BaseController {
     try {
       const { refreshToken } = RefreshTokenSchema.parse(req.body);
       const tokens = await this.authService.refreshToken(refreshToken);
-      ResponseUtil.success(res, tokens, 'Tokens refreshed successfully');
+      return ResponseUtil.success(res, tokens, 'Tokens refreshed successfully');
     } catch (error) {
       if (error instanceof ZodError) {
-        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
       }
       if (error instanceof AppError) {
-        ResponseUtil.error(res, error.message, error.statusCode, error);
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
-      ResponseUtil.error(res, 'Token refresh failed', 500, error);
+      return ResponseUtil.error(res, 'Token refresh failed', 500, error);
     }
   }
 
@@ -184,15 +184,15 @@ export class AuthController extends BaseController {
     try {
       const { refreshToken } = RefreshTokenSchema.parse(req.body);
       await this.authService.logout(refreshToken);
-      ResponseUtil.success(res, null, 'Logged out successfully');
+      return ResponseUtil.success(res, null, 'Logged out successfully');
     } catch (error) {
       if (error instanceof ZodError) {
-        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
       }
       if (error instanceof AppError) {
-        ResponseUtil.error(res, error.message, error.statusCode, error);
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
-      ResponseUtil.error(res, 'Logout failed', 500, error);
+      return ResponseUtil.error(res, 'Logout failed', 500, error);
     }
   }
 }

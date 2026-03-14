@@ -22,6 +22,17 @@ export const CreateBenfekUserSchema = CreatePrincipalProfileSchema.extend({
   password: PasswordSchema,
 });
 
+export const CreateBenfekRecordSchema = z.object({
+  benfekName: z.string().min(2, 'Name must be at least 2 characters'),
+  benfekPhone: z.string().min(10, 'Phone must be at least 10 characters'),
+  allergies: z.string().optional(),
+  scares: z.string().optional(),
+  familyCondition: z.string().optional(),
+  medications: z.string().optional(),
+  hasCurrentCondition: z.boolean().default(false),
+});
+
+export type CreateBenfekRecordDTO = z.infer<typeof CreateBenfekRecordSchema>;
 export type CreatePrincipalUserDTO = z.infer<typeof CreatePrincipalUserSchema>;
 export type UpdatePrincipalUserDTO = z.infer<typeof UpdatePrincipalUserSchema>;
 export type CreateBenfekUserDTO = z.infer<typeof CreateBenfekUserSchema>;

@@ -211,7 +211,7 @@ export class CartController extends BaseController {
   async updateCartItem(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user.id;
-      const itemId = parseInt(req.params.id);
+      const itemId = parseInt(req.params.id as any);
       const data = UpdateCartItemSchema.parse(req.body);
       const cart = await this.cartService.updateCartItem(userId, itemId, data);
       if (!cart) {
@@ -253,7 +253,7 @@ export class CartController extends BaseController {
   async removeCartItem(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user.id;
-      const itemId = parseInt(req.params.id);
+      const itemId = parseInt(req.params.id as any);
       const cart = await this.cartService.removeCartItem(userId, itemId);
       if (!cart) {
         return ResponseUtil.error(res, 'Cart item not found', 404);

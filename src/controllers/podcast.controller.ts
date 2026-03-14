@@ -187,7 +187,7 @@ export class PodcastController extends BaseController {
    */
   async getPodcastById(req: AuthenticatedRequest, res: Response) {
     try {
-      const podcastId = parseInt(req.params.id);
+      const podcastId = parseInt(req.params.id as any);
       const podcast = await this.podcastService.findById(podcastId);
       
       if (!podcast) {
@@ -320,7 +320,7 @@ export class PodcastController extends BaseController {
    */
   async updatePodcast(req: AuthenticatedRequest, res: Response) {
     try {
-      const podcastId = parseInt(req.params.id);
+      const podcastId = parseInt(req.params.id as any);
       const data = UpdatePodcastSchema.parse(req.body);
       const podcast = await this.podcastService.update(podcastId, req.user.id, data);
       return ResponseUtil.success(res, { podcast });
@@ -351,7 +351,7 @@ export class PodcastController extends BaseController {
    */
   async deletePodcast(req: AuthenticatedRequest, res: Response) {
     try {
-      const podcastId = parseInt(req.params.id);
+      const podcastId = parseInt(req.params.id as any);
       await this.podcastService.delete(podcastId, req.user.id);
       return ResponseUtil.success(res, null, 'Podcast deleted successfully');
     } catch (error) {
@@ -386,7 +386,7 @@ export class PodcastController extends BaseController {
    */
   async getStreamUrl(req: AuthenticatedRequest, res: Response) {
     try {
-      const podcastId = parseInt(req.params.id);
+      const podcastId = parseInt(req.params.id as any);
       const streamUrl = await this.podcastService.getStreamUrl(podcastId);
       return ResponseUtil.success(res, { streamUrl });
     } catch (error) {

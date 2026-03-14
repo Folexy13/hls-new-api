@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { LoginUserDTO, RegisterUserDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
 import { UnauthorizedError } from "../utilities/errors";
+import { config } from "../config/config";
 
 @injectable()
 export class AuthService {
@@ -54,10 +55,13 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
+    console.log('Attempting to refresh token:', refreshToken.substring(0, 10) + '...');
     const user = await this.authRepository.findUserByRefreshToken(refreshToken);
     if (!user) {
+      console.warn('Refresh token not found in database');
       throw new UnauthorizedError("Invalid refresh token");
     }
+    console.log('Refresh token valid for user:', user.id);
 
     const newAccessToken = this.generateAccessToken(user);
     const newRefreshToken = this.generateRefreshToken(user);
@@ -66,6 +70,13 @@ export class AuthService {
     await this.authRepository.saveRefreshToken(user.id, newRefreshToken);
 
     return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
       tokens: {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
@@ -80,7 +91,7 @@ export class AuthService {
   private generateAccessToken(user: any): string {
     return jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || "your-secret-key",
+      config.jwtSecret,
       { expiresIn: "15m" }
     );
   }
@@ -88,7 +99,7 @@ export class AuthService {
   private generateRefreshToken(user: any): string {
     return jwt.sign(
       { userId: user.id },
-      process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key",
+      config.jwtRefreshSecret,
       { expiresIn: "7d" }
     );
   }
