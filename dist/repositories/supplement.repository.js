@@ -19,43 +19,32 @@ let SupplementRepository = class SupplementRepository {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll(skip, take) {
-        // Using raw queries to avoid Prisma model type issues
-        const supplements = await this.prisma.$queryRaw `
-      SELECT s.id, s.name, s.description, s.price, s.stock, s.imageUrl, s.category, s.userId,
-             s.createdAt, s.updatedAt,
-             u.id as 'user.id', u.firstName as 'user.firstName',
-             u.lastName as 'user.lastName', u.email as 'user.email'
-      FROM Supplement s
-      JOIN User u ON s.userId = u.id
-      ORDER BY s.createdAt DESC
-      LIMIT ${take || 50} OFFSET ${skip || 0}
-    `;
-        const totalResult = await this.prisma.$queryRaw `
-      SELECT COUNT(*) as count FROM Supplement
-    `;
-        // Transform the flat results into nested objects
-        const transformedSupplements = supplements.map(supplement => ({
-            id: supplement.id,
-            name: supplement.name,
-            description: supplement.description,
-            price: supplement.price,
-            stock: supplement.stock,
-            imageUrl: supplement.imageUrl || null,
-            category: supplement.category || null,
-            userId: supplement.userId,
-            createdAt: supplement.createdAt,
-            updatedAt: supplement.updatedAt,
-            user: {
-                id: supplement['user.id'],
-                firstName: supplement['user.firstName'],
-                lastName: supplement['user.lastName'],
-                email: supplement['user.email']
-            }
-        }));
+    async findAll(skip, take, userId) {
+        const where = userId ? { userId } : {};
+        const [supplements, total] = await Promise.all([
+            this.prisma.supplement.findMany({
+                where,
+                skip: skip || 0,
+                take: take || 50,
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true
+                        }
+                    }
+                },
+                orderBy: {
+                    createdAt: 'desc'
+                }
+            }),
+            this.prisma.supplement.count({ where })
+        ]);
         return {
-            items: transformedSupplements,
-            total: totalResult[0].count
+            items: supplements,
+            total
         };
     }
     async findById(id) {

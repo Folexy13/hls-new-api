@@ -55,10 +55,13 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
+    console.log('Attempting to refresh token:', refreshToken.substring(0, 10) + '...');
     const user = await this.authRepository.findUserByRefreshToken(refreshToken);
     if (!user) {
+      console.warn('Refresh token not found in database');
       throw new UnauthorizedError("Invalid refresh token");
     }
+    console.log('Refresh token valid for user:', user.id);
 
     const newAccessToken = this.generateAccessToken(user);
     const newRefreshToken = this.generateRefreshToken(user);

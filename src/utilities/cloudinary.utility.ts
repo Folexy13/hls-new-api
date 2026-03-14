@@ -33,6 +33,7 @@ export class CloudinaryService {
         {
           folder,
           resource_type: 'auto',
+          timeout: 60000, // 60 seconds timeout
           transformation: [
             { width: 800, height: 800, crop: 'limit' },
             { quality: 'auto:good' },

@@ -65,16 +65,16 @@ let AuthController = class AuthController extends base_controller_1.BaseControll
             try {
                 const data = auth_dto_1.RegisterUserSchema.parse(req.body);
                 const user = await this.authService.register(data);
-                response_utility_1.ResponseUtil.success(res, user, 'User registered successfully', 201);
+                return response_utility_1.ResponseUtil.success(res, user, 'User registered successfully', 201);
             }
             catch (error) {
                 if (error instanceof zod_1.ZodError) {
-                    response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
+                    return response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
                 }
                 if (error instanceof errors_1.AppError) {
-                    response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
+                    return response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
                 }
-                response_utility_1.ResponseUtil.error(res, 'Registration failed', 500, error);
+                return response_utility_1.ResponseUtil.error(res, 'Registration failed', 500, error);
             }
         };
         /**
@@ -110,16 +110,16 @@ let AuthController = class AuthController extends base_controller_1.BaseControll
             try {
                 const data = auth_dto_1.LoginUserSchema.parse(req.body);
                 const result = await this.authService.login(data);
-                response_utility_1.ResponseUtil.success(res, result, 'Login successful');
+                return response_utility_1.ResponseUtil.success(res, result, 'Login successful');
             }
             catch (error) {
                 if (error instanceof zod_1.ZodError) {
-                    response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
+                    return response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
                 }
                 if (error instanceof errors_1.AppError) {
-                    response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
+                    return response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
                 }
-                response_utility_1.ResponseUtil.error(res, 'Login failed', 500, error);
+                return response_utility_1.ResponseUtil.error(res, 'Login failed', 500, error);
             }
         };
         /**
@@ -149,16 +149,16 @@ let AuthController = class AuthController extends base_controller_1.BaseControll
             try {
                 const { refreshToken } = auth_dto_1.RefreshTokenSchema.parse(req.body);
                 const tokens = await this.authService.refreshToken(refreshToken);
-                response_utility_1.ResponseUtil.success(res, tokens, 'Tokens refreshed successfully');
+                return response_utility_1.ResponseUtil.success(res, tokens, 'Tokens refreshed successfully');
             }
             catch (error) {
                 if (error instanceof zod_1.ZodError) {
-                    response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
+                    return response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
                 }
                 if (error instanceof errors_1.AppError) {
-                    response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
+                    return response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
                 }
-                response_utility_1.ResponseUtil.error(res, 'Token refresh failed', 500, error);
+                return response_utility_1.ResponseUtil.error(res, 'Token refresh failed', 500, error);
             }
         };
         /**
@@ -188,16 +188,16 @@ let AuthController = class AuthController extends base_controller_1.BaseControll
             try {
                 const { refreshToken } = auth_dto_1.RefreshTokenSchema.parse(req.body);
                 await this.authService.logout(refreshToken);
-                response_utility_1.ResponseUtil.success(res, null, 'Logged out successfully');
+                return response_utility_1.ResponseUtil.success(res, null, 'Logged out successfully');
             }
             catch (error) {
                 if (error instanceof zod_1.ZodError) {
-                    response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
+                    return response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
                 }
                 if (error instanceof errors_1.AppError) {
-                    response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
+                    return response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
                 }
-                response_utility_1.ResponseUtil.error(res, 'Logout failed', 500, error);
+                return response_utility_1.ResponseUtil.error(res, 'Logout failed', 500, error);
             }
         };
     }

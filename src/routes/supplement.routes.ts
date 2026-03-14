@@ -51,6 +51,7 @@ export const createSupplementRoutes = (container: Container): Router => {
    *         description: List of supplements retrieved successfully
    */
   router.get('/', 
+    authGuard.verify(),
     authenticatedHandler(supplementController.getSupplements.bind(supplementController))
   );
 

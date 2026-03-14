@@ -53,7 +53,7 @@ const createSupplementRoutes = (container) => {
      *       200:
      *         description: List of supplements retrieved successfully
      */
-    router.get('/', (0, response_utility_1.authenticatedHandler)(supplementController.getSupplements.bind(supplementController)));
+    router.get('/', authGuard.verify(), (0, response_utility_1.authenticatedHandler)(supplementController.getSupplements.bind(supplementController)));
     /**
      * @swagger
      * /api/v2/supplements/search:

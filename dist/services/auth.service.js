@@ -21,6 +21,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_repo_1 = __importDefault(require("../repositories/auth.repo"));
 const errors_1 = require("../utilities/errors");
+const config_1 = require("../config/config");
 let AuthService = class AuthService {
     constructor(authRepository) {
         this.authRepository = authRepository;
@@ -60,10 +61,13 @@ let AuthService = class AuthService {
         };
     }
     async refreshToken(refreshToken) {
+        console.log('Attempting to refresh token:', refreshToken.substring(0, 10) + '...');
         const user = await this.authRepository.findUserByRefreshToken(refreshToken);
         if (!user) {
+            console.warn('Refresh token not found in database');
             throw new errors_1.UnauthorizedError("Invalid refresh token");
         }
+        console.log('Refresh token valid for user:', user.id);
         const newAccessToken = this.generateAccessToken(user);
         const newRefreshToken = this.generateRefreshToken(user);
         await this.authRepository.invalidateRefreshToken(refreshToken);
@@ -86,10 +90,10 @@ let AuthService = class AuthService {
         await this.authRepository.invalidateRefreshToken(refreshToken);
     }
     generateAccessToken(user) {
-        return jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET || "your-secret-key", { expiresIn: "15m" });
+        return jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role }, config_1.config.jwtSecret, { expiresIn: "15m" });
     }
     generateRefreshToken(user) {
-        return jsonwebtoken_1.default.sign({ userId: user.id }, process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key", { expiresIn: "7d" });
+        return jsonwebtoken_1.default.sign({ userId: user.id }, config_1.config.jwtRefreshSecret, { expiresIn: "7d" });
     }
 };
 exports.AuthService = AuthService;

@@ -26,9 +26,12 @@ interface Supplement {
 export class SupplementRepository implements IRepository<Supplement> {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
   
-  async findAll(skip?: number, take?: number): Promise<{ items: Supplement[]; total: number }> {
+  async findAll(skip?: number, take?: number, userId?: number): Promise<{ items: Supplement[]; total: number }> {
+    const where = userId ? { userId } : {};
+    
     const [supplements, total] = await Promise.all([
       this.prisma.supplement.findMany({
+        where,
         skip: skip || 0,
         take: take || 50,
         include: {
@@ -45,7 +48,7 @@ export class SupplementRepository implements IRepository<Supplement> {
           createdAt: 'desc'
         }
       }),
-      this.prisma.supplement.count()
+      this.prisma.supplement.count({ where })
     ]);
 
     return {

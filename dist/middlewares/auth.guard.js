@@ -10,8 +10,7 @@ exports.AuthGuard = void 0;
 const inversify_1 = require("inversify");
 const jsonwebtoken_1 = require("jsonwebtoken");
 const response_utility_1 = require("../utilities/response.utility");
-require("dotenv/config");
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const config_1 = require("../config/config");
 let AuthGuard = class AuthGuard {
     verify() {
         return async (req, res, next) => {
@@ -26,7 +25,8 @@ let AuthGuard = class AuthGuard {
                     response_utility_1.ResponseUtil.error(res, "Invalid token format", 401);
                     return;
                 }
-                const decoded = (0, jsonwebtoken_1.verify)(token, JWT_SECRET);
+                const decoded = (0, jsonwebtoken_1.verify)(token, config_1.config.jwtSecret);
+                console.log('Token verified successfully for user:', decoded.userId);
                 req.user = {
                     id: decoded.userId,
                     role: decoded.role,
@@ -35,6 +35,8 @@ let AuthGuard = class AuthGuard {
                 next();
             }
             catch (error) {
+                console.error('JWT Verification failed:', error.message);
+                console.error('Used Secret (first 4 chars):', config_1.config.jwtSecret.substring(0, 4));
                 response_utility_1.ResponseUtil.error(res, "Invalid token", 401);
                 return;
             }

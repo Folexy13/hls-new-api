@@ -167,7 +167,12 @@ export class SupplementController extends BaseController {
       const { page = 1, limit = 10 } = req.query;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
-      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum);
+      
+      // Filter by userId if principal
+      const isPrincipal = req.user.role === 'principal';
+      const filterUserId = isPrincipal ? req.user.id : undefined;
+      
+      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
       
       return ResponseUtil.success(res, { 
         supplements,
@@ -205,7 +210,7 @@ export class SupplementController extends BaseController {
    */
   async getSupplementById(req: AuthenticatedRequest, res: Response) {
     try {
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       const supplement = await this.supplementService.findById(supplementId);
       
       if (!supplement) {
@@ -325,7 +330,7 @@ export class SupplementController extends BaseController {
   async updateSupplement(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       const data = UpdateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.update(supplementId, req.user.id, data);
       return ResponseUtil.success(res, { supplement });
@@ -357,7 +362,7 @@ export class SupplementController extends BaseController {
   async deleteSupplement(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;
-      const supplementId = parseInt(req.params.id);
+      const supplementId = parseInt(req.params.id as any);
       await this.supplementService.delete(supplementId, req.user.id);
       return ResponseUtil.success(res, null, 'Supplement deleted successfully');
     } catch (error) {

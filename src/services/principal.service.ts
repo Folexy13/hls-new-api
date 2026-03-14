@@ -3,15 +3,33 @@ import bcrypt from 'bcrypt';
 import { PrincipalRepository } from '../repositories/principal.repository';
 import { WalletRepository } from '../repositories/wallet.repository';
 import { WithdrawalRepository } from '../repositories/withdrawal.repository';
-import { CreateBenfekUserDTO, CreatePrincipalUserDTO, UpdatePrincipalUserDTO } from '../DTOs/principal.dto';
+import { QuizCodeRepository } from '../repositories/quizcode.repository';
+import { CreateBenfekRecordDTO, CreateBenfekUserDTO, CreatePrincipalUserDTO, UpdatePrincipalUserDTO } from '../DTOs/principal.dto';
 
 @injectable()
 export class PrincipalService {
   constructor(
     @inject(PrincipalRepository) private principalRepository: PrincipalRepository,
     @inject(WalletRepository) private walletRepository: WalletRepository,
-    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository
+    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository,
+    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository
   ) {}
+
+  async createBenfekRecord(principalId: number, data: CreateBenfekRecordDTO) {
+    return this.quizCodeRepository.create({
+      ...data,
+      createdBy: principalId,
+    });
+  }
+
+  async getBenfeksByPrincipal(principalId: number, page: number, limit: number, name?: string) {
+    const skip = Math.max(0, (page - 1) * limit);
+    const take = Math.max(1, Math.min(limit, 100));
+    
+    const { codes, total } = await this.quizCodeRepository.findBenfeksByCreator(principalId, name, skip, take);
+    
+    return { benfeks: codes, total };
+  }
 
   async createPrincipal(data: CreatePrincipalUserDTO) {
     const existingUser = await this.principalRepository.findByEmail(data.email);

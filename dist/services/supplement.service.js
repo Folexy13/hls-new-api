@@ -20,9 +20,9 @@ let SupplementService = class SupplementService {
     constructor(supplementRepository) {
         this.supplementRepository = supplementRepository;
     }
-    async findAll(page = 1, limit = 10) {
+    async findAll(page = 1, limit = 10, userId) {
         const skip = (page - 1) * limit;
-        const result = await this.supplementRepository.findAll(skip, limit);
+        const result = await this.supplementRepository.findAll(skip, limit, userId);
         return { supplements: result.items, total: result.total };
     }
     async findById(id) {
