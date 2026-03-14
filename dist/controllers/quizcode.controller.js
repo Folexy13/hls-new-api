@@ -297,6 +297,12 @@ let QuizCodeController = class QuizCodeController extends base_controller_1.Base
                     benfekPhone: code.benfekPhone,
                     registrationStatus: code.isUsed ? 'registered' : 'not_registered',
                     usedAt: code.usedAt,
+                    createdAt: code.createdAt,
+                    allergies: code.allergies,
+                    scares: code.scares,
+                    familyCondition: code.familyCondition,
+                    medications: code.medications,
+                    hasCurrentCondition: code.hasCurrentCondition,
                 }));
                 response_utility_1.ResponseUtil.success(res, {
                     benfeks,

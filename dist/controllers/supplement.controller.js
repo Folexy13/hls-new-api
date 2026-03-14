@@ -170,11 +170,10 @@ let SupplementController = class SupplementController extends base_controller_1.
             const { page = 1, limit = 10 } = req.query;
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);
-            // Filter by userId if principal, unless admin
-            // Note: Assuming 'admin' role might exist or be checked via email
+            // Filter by userId if principal
             const isPrincipal = req.user.role === 'principal';
-            const isAdmin = req.user.role === 'admin' || req.user.email.includes('admin');
-            const filterUserId = (isPrincipal && !isAdmin) ? req.user.id : undefined;
+            const filterUserId = isPrincipal ? req.user.id : undefined;
+            console.log('Filtering supplements for principal:', { isPrincipal, userId: req.user.id, filterUserId });
             const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
             return response_utility_1.ResponseUtil.success(res, {
                 supplements,
