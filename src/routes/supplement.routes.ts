@@ -57,6 +57,25 @@ export const createSupplementRoutes = (container: Container): Router => {
 
   /**
    * @swagger
+   * /api/v2/supplements/all:
+   *   get:
+   *     tags: [Supplements]
+   *     summary: Get all supplements (non-benfek users)
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: List of supplements retrieved successfully
+   *       403:
+   *         description: Forbidden - Benfeks cannot access this endpoint
+   */
+  router.get('/all',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getAllSupplementsForNonBenfek.bind(supplementController))
+  );
+
+  /**
+   * @swagger
    * /api/v2/supplements/search:
    *   get:
    *     tags: [Supplements]
@@ -73,6 +92,36 @@ export const createSupplementRoutes = (container: Container): Router => {
    */
   router.get('/search', 
     authenticatedHandler(supplementController.searchSupplements.bind(supplementController))
+  );
+
+  /**
+   * @swagger
+   * /api/v2/supplements/details:
+   *   get:
+   *     tags: [Supplements]
+   *     summary: Get supplement details by name and brand
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: name
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: brand
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Supplement details retrieved successfully
+   *       403:
+   *         description: Forbidden - Benfeks cannot access this endpoint
+   */
+  router.get('/details',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getSupplementByNameAndBrand.bind(supplementController))
   );
 
   /**

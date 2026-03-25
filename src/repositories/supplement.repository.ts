@@ -92,6 +92,30 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
+  async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
+    return this.prisma.supplement.findMany({
+      where: {
+        AND: [
+          { name: { contains: name } },
+          { category: { contains: brand } }
+        ]
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
   async create(data: Omit<Supplement, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplement> {    // Remove user property if it exists
     const { user, ...supplementData } = data as any;
     

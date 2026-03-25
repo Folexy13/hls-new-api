@@ -147,6 +147,58 @@ export class QuizCodeController extends BaseController {
 
   /**
    * @swagger
+   * /api/v2/quiz-code/verify-benfek:
+   *   post:
+   *     summary: Verify a benfek quiz code (Public)
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Benfek quiz code verified
+   *       400:
+   *         description: Validation error
+   */
+  verifyBenfekQuizCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
+      const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!result.valid || !result.quizCode) {
+        ResponseUtil.error(res, result.message, 400);
+        return;
+      }
+
+      const quizCode = result.quizCode;
+      const data = {
+        code: quizCode.code,
+        benfekName: quizCode.benfekName,
+        benfekPhone: quizCode.benfekPhone,
+        registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
+        usedAt: quizCode.usedAt
+      };
+
+      ResponseUtil.success(res, data, 'Benfek quiz code verified');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to verify benfek quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
    * /api/v2/quiz-code/use:
    *   post:
    *     summary: Use a quiz code (Benfek only)
