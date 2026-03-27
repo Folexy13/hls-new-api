@@ -14,6 +14,8 @@ export const createQuizCodeRoutes = (container: Container): Router => {
   router.post('/verify-benfek', quizCodeController.verifyBenfekQuizCode);
   // Public route - get benfek quiz payload by code
   router.post('/benfek-quiz', quizCodeController.getBenfekQuizByCodePublic);
+  // Public route - complete benfek quiz (no auth)
+  router.post('/complete', quizCodeController.completeBenfekQuiz);
 
   // Protected routes - require authentication
   router.post('/use', authGuard.verify(), quizCodeController.useQuizCode);
@@ -25,5 +27,3 @@ export const createQuizCodeRoutes = (container: Container): Router => {
 
   return router;
 };
-  // Public route - complete benfek quiz (no auth)
-  router.post('/complete', quizCodeController.completeBenfekQuiz);
