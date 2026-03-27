@@ -12,6 +12,7 @@ export default class AuthRepositoryImpl implements AuthRepository {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: (data as any).username ?? data.email,
         password: data.password, // Note: Password should be hashed before storage
         firstName: data.firstName,
         lastName: data.lastName,

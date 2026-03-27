@@ -84,7 +84,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.updateStock(id, quantity);
   }
 
-  async search(query: string): Promise<Supplement[]> {
-    return this.supplementRepository.search(query);
+  async search(query: string, brand?: string): Promise<Supplement[]> {
+    return this.supplementRepository.search(query, brand);
   }
 }

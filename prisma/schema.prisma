@@ -18,6 +18,7 @@ enum Role {
 model User {
   id            Int            @id @default(autoincrement())
   email         String         @unique
+  username      String         @unique
   password      String
   firstName     String
   lastName      String
@@ -246,6 +247,16 @@ model QuizCode {
   // Benfek data filled by Principal
   benfekName        String
   benfekPhone       String
+  benfekAge         String
+  benfekGender      String
+  basicNickname     String?  @db.Text
+  basicWeight       String?  @db.Text
+  basicHeight       String?  @db.Text
+  lifestyleHabits   String?  @db.Text
+  lifestyleFun      String?  @db.Text
+  lifestylePriority String?  @db.Text
+  preferenceDrugForm String? @db.Text
+  preferenceBudget  Float?
   allergies         String?   @db.Text
   scares            String?   @db.Text  // Health issues that scare them
   familyCondition   String?   @db.Text  // Family's notable health condition

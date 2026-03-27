@@ -1,7 +1,7 @@
 import { injectable, inject } from "inversify";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { LoginUserDTO, RegisterUserDTO } from "../DTOs/auth.dto";
+import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
 import { UnauthorizedError } from "../utilities/errors";
 import { config } from "../config/config";
@@ -86,6 +86,26 @@ export class AuthService {
 
   async logout(refreshToken: string) {
     await this.authRepository.invalidateRefreshToken(refreshToken);
+  }
+
+  async registerBenfek(data: RegisterBenfekDTO) {
+    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    if (existingUser) {
+      throw new Error("User already exists");
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await this.authRepository.createUser({
+      email: data.email,
+      username: data.username,
+      password: hashedPassword,
+      firstName: data.username,
+      lastName: data.username,
+      role: "benfek"
+    });
+
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
   private generateAccessToken(user: any): string {

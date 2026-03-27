@@ -262,7 +262,6 @@ export class SupplementController extends BaseController {
    */
   async getSupplementByNameAndBrand(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensureNotBenfek(req, res)) return;
       const name = (req.query.name as string) || '';
       const brand = (req.query.brand as string) || '';
       if (!name || !brand) {
@@ -306,7 +305,6 @@ export class SupplementController extends BaseController {
    */
   async getAllSupplementsForNonBenfek(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensureNotBenfek(req, res)) return;
       const { page = 1, limit = 10 } = req.query;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
@@ -498,11 +496,12 @@ export class SupplementController extends BaseController {
   async searchSupplements(req: AuthenticatedRequest, res: Response) {
     try {
       const query = req.query.q as string;
+      const brand = (req.query.brand as string) || undefined;
       if (!query) {
         return ResponseUtil.error(res, 'Search query is required', 400);
       }
 
-      const supplements = await this.supplementService.search(query);
+      const supplements = await this.supplementService.search(query, brand);
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
       return ResponseUtil.error(res, error as string);

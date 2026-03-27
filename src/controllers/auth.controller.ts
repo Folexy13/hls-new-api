@@ -7,7 +7,8 @@ import { ResponseUtil } from '../utilities/response.utility';
 import {
   LoginUserSchema,
   RegisterUserSchema,
-  RefreshTokenSchema
+  RefreshTokenSchema,
+  RegisterBenfekSchema
 } from '../DTOs/auth.dto';
 import { Container } from 'inversify';
 import { AppError } from '../utilities/errors';
@@ -70,6 +71,58 @@ export class AuthController extends BaseController {
         return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
       return ResponseUtil.error(res, 'Registration failed', 500, error);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/auth/register-benfek:
+   *   post:
+   *     summary: Register a new benfek user
+   *     tags: [Auth]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - username
+   *               - email
+   *               - password
+   *               - confirmPassword
+   *             properties:
+   *               username:
+   *                 type: string
+   *               email:
+   *                 type: string
+   *                 format: email
+   *               password:
+   *                 type: string
+   *                 minLength: 8
+   *               confirmPassword:
+   *                 type: string
+   *     responses:
+   *       201:
+   *         description: Benfek registered successfully
+   *       400:
+   *         description: Validation error
+   *       409:
+   *         description: User already exists
+   */
+  registerBenfek: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const data = RegisterBenfekSchema.parse(req.body);
+      const user = await this.authService.registerBenfek(data);
+      ResponseUtil.success(res, user, 'Benfek registered successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+      if (error instanceof AppError) {
+        ResponseUtil.error(res, error.message, error.statusCode, error);
+      }
+      ResponseUtil.error(res, 'Registration failed', 500, error);
     }
   }
 
