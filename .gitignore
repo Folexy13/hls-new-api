@@ -6,4 +6,4 @@ node_modules
 .qodo
 package-lock.json
 yarn.lock
-dist
+dist/

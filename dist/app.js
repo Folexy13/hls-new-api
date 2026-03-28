@@ -25,7 +25,6 @@ app.use((0, cors_1.default)({
         "https://hlsnigeria.com",
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://hls-testing.netlify.app",
         "http://localhost:3002"
     ], // or an array of allowed origins
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
