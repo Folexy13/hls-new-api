@@ -92,6 +92,30 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
+  async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
+    return this.prisma.supplement.findMany({
+      where: {
+        AND: [
+          { name: { contains: name } },
+          { category: { contains: brand } }
+        ]
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
   async create(data: Omit<Supplement, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplement> {    // Remove user property if it exists
     const { user, ...supplementData } = data as any;
     
@@ -134,14 +158,18 @@ export class SupplementRepository implements IRepository<Supplement> {
       where: { id }
     });
   }
-  async search(query: string): Promise<Supplement[]> {
+  async search(query: string, brand?: string): Promise<Supplement[]> {
+    const where: any = {
+      OR: [
+        { name: { contains: query } },
+        { description: { contains: query } }
+      ]
+    };
+    if (brand) {
+      where.AND = [{ category: { contains: brand } }];
+    }
     return this.prisma.supplement.findMany({
-      where: {
-        OR: [
-          { name: { contains: query } },
-          { description: { contains: query } }
-        ]
-      },
+      where,
       include: {
         user: {
           select: {

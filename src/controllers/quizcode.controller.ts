@@ -4,7 +4,7 @@ import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
-import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema } from '../DTOs/quiz.dto';
+import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -73,6 +73,8 @@ export class QuizCodeController extends BaseController {
         createdBy: user.id,
         benfekName: data.benfekName,
         benfekPhone: data.benfekPhone,
+        benfekAge: data.benfekAge,
+        benfekGender: data.benfekGender,
         allergies: data.allergies,
         scares: data.scares,
         familyCondition: data.familyCondition,
@@ -142,6 +144,200 @@ export class QuizCodeController extends BaseController {
         return;
       }
       ResponseUtil.error(res, 'Failed to validate quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/verify-benfek:
+   *   post:
+   *     summary: Verify a benfek quiz code (Public)
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Benfek quiz code verified
+   *       400:
+   *         description: Validation error
+   */
+  verifyBenfekQuizCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
+      const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!result.valid || !result.quizCode) {
+        ResponseUtil.error(res, result.message, 400);
+        return;
+      }
+
+      const quizCode = result.quizCode;
+      const data = {
+        code: quizCode.code,
+        benfekName: quizCode.benfekName,
+        benfekPhone: quizCode.benfekPhone,
+        registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
+        usedAt: quizCode.usedAt
+      };
+
+      ResponseUtil.success(res, data, 'Benfek quiz code verified');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to verify benfek quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/benfek-quiz:
+   *   post:
+   *     summary: Get quiz payload for a benfek by quiz code (Public)
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Quiz payload returned
+   *       400:
+   *         description: Validation error
+   */
+  getBenfekQuizByCodePublic: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
+      const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!result.valid || !result.quizCode) {
+        ResponseUtil.error(res, result.message, 400);
+        return;
+      }
+
+      const quizCode = result.quizCode;
+      const payload = {
+        code: quizCode.code,
+        benfekName: quizCode.benfekName,
+        benfekPhone: quizCode.benfekPhone,
+        benfekAge: (quizCode as any).benfekAge,
+        benfekGender: (quizCode as any).benfekGender,
+        registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
+        quizFields: {
+          basics: ['nickname', 'weight', 'height'],
+          lifestyle: ['habits', 'funActivities', 'priority'],
+          preferences: ['drugForm', 'budget']
+        }
+      };
+
+      ResponseUtil.success(res, payload, 'Quiz payload retrieved');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to retrieve quiz payload', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/complete:
+   *   post:
+   *     summary: Complete benfek quiz and register
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *               - basics
+   *               - lifestyle
+   *               - preferences
+   *             properties:
+   *               code:
+   *                 type: string
+   *               basics:
+   *                 type: object
+   *                 required: [weight, height]
+   *                 properties:
+   *                   nickname:
+   *                     type: string
+   *                   weight:
+   *                     type: string
+   *                   height:
+   *                     type: string
+   *               lifestyle:
+   *                 type: object
+   *                 required: [habits, funActivities, priority]
+   *                 properties:
+   *                   habits:
+   *                     type: string
+   *                   funActivities:
+   *                     type: string
+   *                   priority:
+   *                     type: string
+   *               preferences:
+   *                 type: object
+   *                 required: [drugForm, budget]
+   *                 properties:
+   *                   drugForm:
+   *                     type: string
+   *                   budget:
+   *                     type: number
+   *     responses:
+   *       200:
+   *         description: Quiz completed successfully
+   *       400:
+   *         description: Validation error
+   */
+  completeBenfekQuiz: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const data = CompleteBenfekQuizSchema.parse(req.body);
+      const validation = await this.quizCodeRepository.validateCode(data.code.toUpperCase());
+      if (!validation.valid || !validation.quizCode) {
+        ResponseUtil.error(res, validation.message, 400);
+        return;
+      }
+
+      const updated = await this.quizCodeRepository.completeBenfekQuiz(data.code.toUpperCase(), {
+        basicNickname: data.basics.nickname,
+        basicWeight: data.basics.weight,
+        basicHeight: data.basics.height,
+        lifestyleHabits: data.lifestyle.habits,
+        lifestyleFun: data.lifestyle.funActivities,
+        lifestylePriority: data.lifestyle.priority,
+        preferenceDrugForm: data.preferences.drugForm,
+        preferenceBudget: data.preferences.budget,
+      });
+
+      ResponseUtil.success(res, { quizCode: updated }, 'Quiz completed successfully');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to complete quiz', 500, error);
     }
   };
 

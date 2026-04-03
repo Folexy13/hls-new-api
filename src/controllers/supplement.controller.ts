@@ -127,6 +127,14 @@ export class SupplementController extends BaseController {
     return true;
   }
 
+  private ensureNotBenfek(req: AuthenticatedRequest, res: Response): boolean {
+    if (req.user.role === 'benfek') {
+      ResponseUtil.error(res, 'Benfeks are not allowed to access this resource', 403);
+      return false;
+    }
+    return true;
+  }
+
   /**
    * @swagger
    * /api/v2/supplements:
@@ -221,6 +229,92 @@ export class SupplementController extends BaseController {
       }
 
       return ResponseUtil.success(res, { supplement });
+    } catch (error) {
+      return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/supplements/details:
+   *   get:
+   *     tags: [Supplements]
+   *     summary: Get supplement details by name and brand
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - name: name
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - name: brand
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Supplement details retrieved successfully
+   *       400:
+   *         description: Missing name or brand
+   *       403:
+   *         description: Forbidden - Benfeks cannot access this endpoint
+   */
+  async getSupplementByNameAndBrand(req: AuthenticatedRequest, res: Response) {
+    try {
+      const name = (req.query.name as string) || '';
+      const brand = (req.query.brand as string) || '';
+      if (!name || !brand) {
+        return ResponseUtil.error(res, 'name and brand are required', 400);
+      }
+
+      const supplements = await this.supplementService.findByNameAndBrand(name, brand);
+      return ResponseUtil.success(res, { supplements });
+    } catch (error) {
+      return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/supplements/all:
+   *   get:
+   *     tags: [Supplements]
+   *     summary: Get all supplements (non-benfek users)
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           default: 1
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 100
+   *           default: 10
+   *     responses:
+   *       200:
+   *         description: List of supplements retrieved successfully
+   *       403:
+   *         description: Forbidden - Benfeks cannot access this endpoint
+   */
+  async getAllSupplementsForNonBenfek(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum);
+
+      return ResponseUtil.success(res, {
+        supplements,
+        meta: PaginationUtil.getPaginationMetadata(total, pageNum, limitNum)
+      });
     } catch (error) {
       return ResponseUtil.error(res, error as string);
     }
@@ -403,11 +497,12 @@ export class SupplementController extends BaseController {
   async searchSupplements(req: AuthenticatedRequest, res: Response) {
     try {
       const query = req.query.q as string;
+      const brand = (req.query.brand as string) || undefined;
       if (!query) {
         return ResponseUtil.error(res, 'Search query is required', 400);
       }
 
-      const supplements = await this.supplementService.search(query);
+      const supplements = await this.supplementService.search(query, brand);
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
       return ResponseUtil.error(res, error as string);

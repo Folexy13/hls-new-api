@@ -6,6 +6,8 @@ export interface CreateQuizCodeDTO {
   createdBy: number;
   benfekName: string;
   benfekPhone: string;
+  benfekAge: string;
+  benfekGender: string;
   allergies?: string;
   scares?: string;
   familyCondition?: string;
@@ -47,13 +49,15 @@ export class QuizCodeRepository {
    */
   async create(data: CreateQuizCodeDTO): Promise<QuizCode> {
     const code = this.generateCode();
-    
+
     return this.prisma.quizCode.create({
       data: {
         code,
         createdBy: data.createdBy,
         benfekName: data.benfekName,
         benfekPhone: data.benfekPhone,
+        benfekAge: data.benfekAge,
+        benfekGender: data.benfekGender,
         allergies: data.allergies,
         scares: data.scares,
         familyCondition: data.familyCondition,
@@ -111,13 +115,47 @@ export class QuizCodeRepository {
   /**
    * Mark a quiz code as used
    */
-  async markAsUsed(code: string, userId: number): Promise<QuizCode> {
+  async markAsUsed(code: string, userId?: number | null): Promise<QuizCode> {
     return this.prisma.quizCode.update({
       where: { code },
       data: {
         isUsed: true,
-        usedBy: userId,
+        usedBy: userId ?? null,
         usedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Save benfek quiz answers and mark as used (public completion flow)
+   */
+  async completeBenfekQuiz(
+    code: string,
+    data: {
+      basicNickname?: string;
+      basicWeight: string;
+      basicHeight: string;
+      lifestyleHabits: string;
+      lifestyleFun: string;
+      lifestylePriority: string;
+      preferenceDrugForm: string;
+      preferenceBudget: number;
+    }
+  ): Promise<QuizCode> {
+    return this.prisma.quizCode.update({
+      where: { code },
+      data: {
+        basicNickname: data.basicNickname,
+        basicWeight: data.basicWeight,
+        basicHeight: data.basicHeight,
+        lifestyleHabits: data.lifestyleHabits,
+        lifestyleFun: data.lifestyleFun,
+        lifestylePriority: data.lifestylePriority,
+        preferenceDrugForm: data.preferenceDrugForm,
+        preferenceBudget: data.preferenceBudget,
+        isUsed: true,
+        usedAt: new Date(),
+        usedBy: null,
       },
     });
   }

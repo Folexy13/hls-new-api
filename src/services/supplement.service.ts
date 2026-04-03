@@ -21,6 +21,10 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.findByUserId(userId);
   }
 
+  async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
+    return this.supplementRepository.findByNameAndBrand(name, brand);
+  }
+
   async create(userId: number, data: CreateSupplementDTO): Promise<Supplement> {
     return this.supplementRepository.create({
       ...data,
@@ -32,7 +36,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
 
   async update(id: number, userId: number, data: UpdateSupplementDTO): Promise<Supplement> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -47,7 +51,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
 
   async delete(id: number, userId: number): Promise<void> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -68,7 +72,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
 
   async updateStock(id: number, quantity: number): Promise<Supplement> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -80,7 +84,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.updateStock(id, quantity);
   }
 
-  async search(query: string): Promise<Supplement[]> {
-    return this.supplementRepository.search(query);
+  async search(query: string, brand?: string): Promise<Supplement[]> {
+    return this.supplementRepository.search(query, brand);
   }
 }
