@@ -130,6 +130,13 @@ let SupplementController = class SupplementController extends base_controller_1.
         }
         return true;
     }
+    ensureNotBenfek(req, res) {
+        if (req.user.role === 'benfek') {
+            response_utility_1.ResponseUtil.error(res, 'Benfeks are not allowed to access this resource', 403);
+            return false;
+        }
+        return true;
+    }
     /**
      * @swagger
      * /api/v2/supplements:
@@ -170,11 +177,10 @@ let SupplementController = class SupplementController extends base_controller_1.
             const { page = 1, limit = 10 } = req.query;
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);
-            // Filter by userId if principal, unless admin
-            // Note: Assuming 'admin' role might exist or be checked via email
+            // Filter by userId if principal
             const isPrincipal = req.user.role === 'principal';
-            const isAdmin = req.user.role === 'admin' || req.user.email.includes('admin');
-            const filterUserId = (isPrincipal && !isAdmin) ? req.user.id : undefined;
+            const filterUserId = isPrincipal ? req.user.id : undefined;
+            console.log('Filtering supplements for principal:', { isPrincipal, userId: req.user.id, filterUserId });
             const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
             return response_utility_1.ResponseUtil.success(res, {
                 supplements,
@@ -218,6 +224,90 @@ let SupplementController = class SupplementController extends base_controller_1.
                 return response_utility_1.ResponseUtil.error(res, 'Supplement not found', 404);
             }
             return response_utility_1.ResponseUtil.success(res, { supplement });
+        }
+        catch (error) {
+            return response_utility_1.ResponseUtil.error(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/v2/supplements/details:
+     *   get:
+     *     tags: [Supplements]
+     *     summary: Get supplement details by name and brand
+     *     security:
+     *       - BearerAuth: []
+     *     parameters:
+     *       - name: name
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *       - name: brand
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Supplement details retrieved successfully
+     *       400:
+     *         description: Missing name or brand
+     *       403:
+     *         description: Forbidden - Benfeks cannot access this endpoint
+     */
+    async getSupplementByNameAndBrand(req, res) {
+        try {
+            const name = req.query.name || '';
+            const brand = req.query.brand || '';
+            if (!name || !brand) {
+                return response_utility_1.ResponseUtil.error(res, 'name and brand are required', 400);
+            }
+            const supplements = await this.supplementService.findByNameAndBrand(name, brand);
+            return response_utility_1.ResponseUtil.success(res, { supplements });
+        }
+        catch (error) {
+            return response_utility_1.ResponseUtil.error(res, error);
+        }
+    }
+    /**
+     * @swagger
+     * /api/v2/supplements/all:
+     *   get:
+     *     tags: [Supplements]
+     *     summary: Get all supplements (non-benfek users)
+     *     security:
+     *       - BearerAuth: []
+     *     parameters:
+     *       - in: query
+     *         name: page
+     *         schema:
+     *           type: integer
+     *           minimum: 1
+     *           default: 1
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *           minimum: 1
+     *           maximum: 100
+     *           default: 10
+     *     responses:
+     *       200:
+     *         description: List of supplements retrieved successfully
+     *       403:
+     *         description: Forbidden - Benfeks cannot access this endpoint
+     */
+    async getAllSupplementsForNonBenfek(req, res) {
+        try {
+            const { page = 1, limit = 10 } = req.query;
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum);
+            return response_utility_1.ResponseUtil.success(res, {
+                supplements,
+                meta: pagination_utility_1.PaginationUtil.getPaginationMetadata(total, pageNum, limitNum)
+            });
         }
         catch (error) {
             return response_utility_1.ResponseUtil.error(res, error);
@@ -404,10 +494,11 @@ let SupplementController = class SupplementController extends base_controller_1.
     async searchSupplements(req, res) {
         try {
             const query = req.query.q;
+            const brand = req.query.brand || undefined;
             if (!query) {
                 return response_utility_1.ResponseUtil.error(res, 'Search query is required', 400);
             }
-            const supplements = await this.supplementService.search(query);
+            const supplements = await this.supplementService.search(query, brand);
             return response_utility_1.ResponseUtil.success(res, { supplements });
         }
         catch (error) {

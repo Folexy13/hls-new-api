@@ -22,6 +22,7 @@ let AuthRepositoryImpl = class AuthRepositoryImpl {
         return this.prisma.user.create({
             data: {
                 email: data.email,
+                username: data.username ?? data.email,
                 password: data.password, // Note: Password should be hashed before storage
                 firstName: data.firstName,
                 lastName: data.lastName,

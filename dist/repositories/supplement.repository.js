@@ -80,6 +80,29 @@ let SupplementRepository = class SupplementRepository {
             }
         });
     }
+    async findByNameAndBrand(name, brand) {
+        return this.prisma.supplement.findMany({
+            where: {
+                AND: [
+                    { name: { contains: name } },
+                    { category: { contains: brand } }
+                ]
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+    }
     async create(data) {
         const { user, ...supplementData } = data;
         return this.prisma.supplement.create({
@@ -118,14 +141,18 @@ let SupplementRepository = class SupplementRepository {
             where: { id }
         });
     }
-    async search(query) {
+    async search(query, brand) {
+        const where = {
+            OR: [
+                { name: { contains: query } },
+                { description: { contains: query } }
+            ]
+        };
+        if (brand) {
+            where.AND = [{ category: { contains: brand } }];
+        }
         return this.prisma.supplement.findMany({
-            where: {
-                OR: [
-                    { name: { contains: query } },
-                    { description: { contains: query } }
-                ]
-            },
+            where,
             include: {
                 user: {
                     select: {

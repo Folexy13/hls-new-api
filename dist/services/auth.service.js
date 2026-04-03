@@ -89,6 +89,23 @@ let AuthService = class AuthService {
     async logout(refreshToken) {
         await this.authRepository.invalidateRefreshToken(refreshToken);
     }
+    async registerBenfek(data) {
+        const existingUser = await this.authRepository.findUserByEmail(data.email);
+        if (existingUser) {
+            throw new Error("User already exists");
+        }
+        const hashedPassword = await bcrypt_1.default.hash(data.password, 10);
+        const user = await this.authRepository.createUser({
+            email: data.email,
+            username: data.username,
+            password: hashedPassword,
+            firstName: data.username,
+            lastName: data.username,
+            role: "benfek"
+        });
+        const { password, ...userWithoutPassword } = user;
+        return userWithoutPassword;
+    }
     generateAccessToken(user) {
         return jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role }, config_1.config.jwtSecret, { expiresIn: "15m" });
     }

@@ -31,6 +31,9 @@ let SupplementService = class SupplementService {
     async findByUserId(userId) {
         return this.supplementRepository.findByUserId(userId);
     }
+    async findByNameAndBrand(name, brand) {
+        return this.supplementRepository.findByNameAndBrand(name, brand);
+    }
     async create(userId, data) {
         return this.supplementRepository.create({
             ...data,
@@ -76,8 +79,8 @@ let SupplementService = class SupplementService {
         }
         return this.supplementRepository.updateStock(id, quantity);
     }
-    async search(query) {
-        return this.supplementRepository.search(query);
+    async search(query, brand) {
+        return this.supplementRepository.search(query, brand);
     }
 };
 exports.SupplementService = SupplementService;

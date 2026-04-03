@@ -10,6 +10,12 @@ const createQuizCodeRoutes = (container) => {
     const authGuard = container.get(auth_guard_1.AuthGuard);
     // Public route - validate quiz code
     router.post('/validate', quizCodeController.validateQuizCode);
+    // Public route - verify benfek quiz code
+    router.post('/verify-benfek', quizCodeController.verifyBenfekQuizCode);
+    // Public route - get benfek quiz payload by code
+    router.post('/benfek-quiz', quizCodeController.getBenfekQuizByCodePublic);
+    // Public route - complete benfek quiz (no auth)
+    router.post('/complete', quizCodeController.completeBenfekQuiz);
     // Protected routes - require authentication
     router.post('/use', authGuard.verify(), quizCodeController.useQuizCode);
     router.get('/benfeks', authGuard.verify(), quizCodeController.getMyBenfeks);

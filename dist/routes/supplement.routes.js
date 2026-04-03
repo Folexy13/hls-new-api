@@ -56,6 +56,17 @@ const createSupplementRoutes = (container) => {
     router.get('/', authGuard.verify(), (0, response_utility_1.authenticatedHandler)(supplementController.getSupplements.bind(supplementController)));
     /**
      * @swagger
+     * /api/v2/supplements/all:
+     *   get:
+     *     tags: [Supplements]
+     *     summary: Get all supplements (public)
+     *     responses:
+     *       200:
+     *         description: List of supplements retrieved successfully
+     */
+    router.get('/all', (0, response_utility_1.authenticatedHandler)(supplementController.getAllSupplementsForNonBenfek.bind(supplementController)));
+    /**
+     * @swagger
      * /api/v2/supplements/search:
      *   get:
      *     tags: [Supplements]
@@ -66,11 +77,38 @@ const createSupplementRoutes = (container) => {
      *         required: true
      *         schema:
      *           type: string
+     *       - in: query
+     *         name: brand
+     *         required: false
+     *         schema:
+     *           type: string
      *     responses:
      *       200:
      *         description: Search results retrieved successfully
      */
     router.get('/search', (0, response_utility_1.authenticatedHandler)(supplementController.searchSupplements.bind(supplementController)));
+    /**
+     * @swagger
+     * /api/v2/supplements/details:
+     *   get:
+     *     tags: [Supplements]
+     *     summary: Get supplement details by name and brand (public)
+     *     parameters:
+     *       - in: query
+     *         name: name
+     *         required: true
+     *         schema:
+     *           type: string
+     *       - in: query
+     *         name: brand
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Supplement details retrieved successfully
+     */
+    router.get('/details', (0, response_utility_1.authenticatedHandler)(supplementController.getSupplementByNameAndBrand.bind(supplementController)));
     /**
      * @swagger
      * /api/v2/supplements/user:

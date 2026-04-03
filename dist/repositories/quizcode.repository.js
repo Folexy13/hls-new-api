@@ -42,6 +42,8 @@ let QuizCodeRepository = class QuizCodeRepository {
                 createdBy: data.createdBy,
                 benfekName: data.benfekName,
                 benfekPhone: data.benfekPhone,
+                benfekAge: data.benfekAge,
+                benfekGender: data.benfekGender,
                 allergies: data.allergies,
                 scares: data.scares,
                 familyCondition: data.familyCondition,
@@ -93,8 +95,29 @@ let QuizCodeRepository = class QuizCodeRepository {
             where: { code },
             data: {
                 isUsed: true,
-                usedBy: userId,
+                usedBy: userId ?? null,
                 usedAt: new Date(),
+            },
+        });
+    }
+    /**
+     * Save benfek quiz answers and mark as used (public completion flow)
+     */
+    async completeBenfekQuiz(code, data) {
+        return this.prisma.quizCode.update({
+            where: { code },
+            data: {
+                basicNickname: data.basicNickname,
+                basicWeight: data.basicWeight,
+                basicHeight: data.basicHeight,
+                lifestyleHabits: data.lifestyleHabits,
+                lifestyleFun: data.lifestyleFun,
+                lifestylePriority: data.lifestylePriority,
+                preferenceDrugForm: data.preferenceDrugForm,
+                preferenceBudget: data.preferenceBudget,
+                isUsed: true,
+                usedAt: new Date(),
+                usedBy: null,
             },
         });
     }

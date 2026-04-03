@@ -79,6 +79,58 @@ let AuthController = class AuthController extends base_controller_1.BaseControll
         };
         /**
          * @swagger
+         * /api/v2/auth/register-benfek:
+         *   post:
+         *     summary: Register a new benfek user
+         *     tags: [Auth]
+         *     requestBody:
+         *       required: true
+         *       content:
+         *         application/json:
+         *           schema:
+         *             type: object
+         *             required:
+         *               - username
+         *               - email
+         *               - password
+         *               - confirmPassword
+         *             properties:
+         *               username:
+         *                 type: string
+         *               email:
+         *                 type: string
+         *                 format: email
+         *               password:
+         *                 type: string
+         *                 minLength: 8
+         *               confirmPassword:
+         *                 type: string
+         *     responses:
+         *       201:
+         *         description: Benfek registered successfully
+         *       400:
+         *         description: Validation error
+         *       409:
+         *         description: User already exists
+         */
+        this.registerBenfek = async (req, res) => {
+            try {
+                const data = auth_dto_1.RegisterBenfekSchema.parse(req.body);
+                const user = await this.authService.registerBenfek(data);
+                response_utility_1.ResponseUtil.success(res, user, 'Benfek registered successfully', 201);
+            }
+            catch (error) {
+                if (error instanceof zod_1.ZodError) {
+                    response_utility_1.ResponseUtil.error(res, 'Validation failed', 400, error);
+                }
+                if (error instanceof errors_1.AppError) {
+                    response_utility_1.ResponseUtil.error(res, error.message, error.statusCode, error);
+                }
+                response_utility_1.ResponseUtil.error(res, 'Registration failed', 500, error);
+            }
+        };
+        /**
+         * @swagger
          * /api/v2/auth/login:
          *   post:
          *     summary: Login user

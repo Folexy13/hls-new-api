@@ -8,7 +8,7 @@ import { AuthRepository } from './Abstractions/authrepo';
 export default class AuthRepositoryImpl implements AuthRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
-  async createUser(data: RegisterUserDTO): Promise<User> {
+  async createUser(data: RegisterUserDTO & { username?: string }): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,

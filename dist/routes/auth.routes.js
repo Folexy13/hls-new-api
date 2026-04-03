@@ -7,6 +7,7 @@ const createAuthRoutes = (container) => {
     const router = (0, express_1.Router)();
     const authController = container.get(auth_controller_1.AuthController);
     router.post('/register', authController.register.bind(authController));
+    router.post('/register-benfek', authController.registerBenfek.bind(authController));
     router.post('/login', authController.login.bind(authController));
     router.post('/refresh', authController.refreshToken.bind(authController));
     router.post('/logout', authController.logout.bind(authController));
