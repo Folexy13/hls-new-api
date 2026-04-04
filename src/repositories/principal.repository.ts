@@ -19,6 +19,7 @@ export class PrincipalRepository {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -38,6 +39,7 @@ export class PrincipalRepository {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
