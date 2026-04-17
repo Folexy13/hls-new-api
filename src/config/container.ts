@@ -31,6 +31,8 @@ import { QuizCodeController } from '../controllers/quizcode.controller';
 import { PrincipalRepository } from '../repositories/principal.repository';
 import { PrincipalService } from '../services/principal.service';
 import { PrincipalController } from '../controllers/principal.controller';
+import { ResearcherController } from '../controllers/researcher.controller';
+import { BenfekController } from '../controllers/benfek.controller';
 
 const container = new Container();
 
@@ -79,5 +81,7 @@ container.bind<SupplementController>(SupplementController).toSelf();
 container.bind<PaystackController>(PaystackController).toSelf();
 container.bind<QuizCodeController>(QuizCodeController).toSelf();
 container.bind<PrincipalController>(PrincipalController).toSelf();
+container.bind<ResearcherController>(ResearcherController).toSelf();
+container.bind<BenfekController>(BenfekController).toSelf();
 
 export { container };

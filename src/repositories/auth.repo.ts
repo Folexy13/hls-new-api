@@ -8,7 +8,7 @@ import { AuthRepository } from './Abstractions/authrepo';
 export default class AuthRepositoryImpl implements AuthRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
-  async createUser(data: RegisterUserDTO & { username?: string }): Promise<User> {
+  async createUser(data: RegisterUserDTO & { username?: string; phone?: string | null }): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,
@@ -16,6 +16,7 @@ export default class AuthRepositoryImpl implements AuthRepository {
         password: data.password, // Note: Password should be hashed before storage
         firstName: data.firstName,
         lastName: data.lastName,
+        phone: data.phone ?? null,
         role: data.role || 'benfek'
       }
     });
@@ -24,6 +25,18 @@ export default class AuthRepositoryImpl implements AuthRepository {
   async findUserByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email }
+    });
+  }
+
+  async findUserByUsername(username: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { username }
+    });
+  }
+
+  async findUserByPhone(phone: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { phone }
     });
   }
 

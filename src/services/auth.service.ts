@@ -1,9 +1,9 @@
 import { injectable, inject } from "inversify";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO } from "../DTOs/auth.dto";
+import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
-import { UnauthorizedError } from "../utilities/errors";
+import { ConflictError, UnauthorizedError } from "../utilities/errors";
 import { config } from "../config/config";
 
 @injectable()
@@ -15,7 +15,14 @@ export class AuthService {
   async register(data: RegisterUserDTO) {
     const existingUser = await this.authRepository.findUserByEmail(data.email);
     if (existingUser) {
-      throw new Error("User already exists");
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    if (data.phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(data.phone);
+      if (existingPhone) {
+        throw new ConflictError("Phone number is already registered.");
+      }
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -24,34 +31,21 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return this.createAuthResponse(user);
   }
 
   async login(data: LoginUserDTO) {
     const user = await this.authRepository.findUserByEmail(data.email);
     if (!user) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError("Invalid email or password.");
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError("Invalid email or password.");
     }
 
-    const accessToken = this.generateAccessToken(user);
-    const refreshToken = this.generateRefreshToken(user);
-
-    await this.authRepository.saveRefreshToken(user.id, refreshToken);
-
-    const { password, ...userWithoutPassword } = user;
-    return {
-      user: userWithoutPassword,
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
-    };
+    return this.createAuthResponse(user);
   }
 
   async refreshToken(refreshToken: string) {
@@ -91,7 +85,12 @@ export class AuthService {
   async registerBenfek(data: RegisterBenfekDTO) {
     const existingUser = await this.authRepository.findUserByEmail(data.email);
     if (existingUser) {
-      throw new Error("User already exists");
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    const existingUsername = await this.authRepository.findUserByUsername(data.username);
+    if (existingUsername) {
+      throw new ConflictError("Username is already taken.");
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -104,8 +103,50 @@ export class AuthService {
       role: "benfek"
     });
 
+    return this.createAuthResponse(user);
+  }
+
+  async registerUnreferredBenfek(data: RegisterUnreferredBenfekDTO) {
+    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    if (existingUser) {
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    if (data.phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(data.phone);
+      if (existingPhone) {
+        throw new ConflictError("Phone number is already registered.");
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await this.authRepository.createUser({
+      email: data.email,
+      username: data.email,
+      password: hashedPassword,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
+      role: "benfek"
+    });
+
+    return this.createAuthResponse(user);
+  }
+
+  private async createAuthResponse(user: any) {
+    const accessToken = this.generateAccessToken(user);
+    const refreshToken = this.generateRefreshToken(user);
+
+    await this.authRepository.saveRefreshToken(user.id, refreshToken);
+
     const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return {
+      user: userWithoutPassword,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
+    };
   }
 
   private generateAccessToken(user: any): string {

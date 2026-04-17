@@ -28,6 +28,7 @@ model User {
   userId        String?        @unique
   podcasts      Podcast[]
   supplements   Supplement[]
+  researcherPacks ResearcherPack[]
   carts         Cart[]
   orders        Order[]
   payments      Payment[]
@@ -35,6 +36,7 @@ model User {
   wallet        Wallet?
   withdrawals   Withdrawal[]
   nutrient      NutrientType?  // One-to-one relation, no fields/references here
+  gamePoints    BenfekGamePoint?
   quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -68,12 +70,46 @@ model Supplement {
   stock       Int
   imageUrl    String?     // Product image URL
   category    String?     // Product category
+  manufacturer String?
+  dosageForm  String?
+  budgetRange String?
+  tags        Json?
+  status      String      @default("in_stock")
   userId      Int
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   cartItems   CartItem[]
   orderItems  OrderItem[]
+  researcherPackItems ResearcherPackItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+}
+
+model ResearcherPack {
+  id           Int                  @id @default(autoincrement())
+  quizCode     String
+  packId       String
+  packName     String
+  researcherId Int
+  researcher   User                 @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  items        ResearcherPackItem[]
+  status       String               @default("draft")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([quizCode, packId])
+}
+
+model ResearcherPackItem {
+  id           Int            @id @default(autoincrement())
+  packId       Int
+  pack         ResearcherPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  supplementId Int
+  supplement   Supplement     @relation(fields: [supplementId], references: [id], onDelete: Cascade)
+  quantity     Int            @default(1)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([packId, supplementId])
 }
 
 model Cart {
@@ -231,6 +267,19 @@ model Preference {
   maxBudget   Float
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model BenfekGamePoint {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @unique
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizCode  String?  @unique
+  email     String?
+  phone     String?
+  points    Int      @default(0)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Quiz codes for benfek registration - created by Principal when adding a benfek
