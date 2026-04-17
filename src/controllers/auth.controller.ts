@@ -8,7 +8,8 @@ import {
   LoginUserSchema,
   RegisterUserSchema,
   RefreshTokenSchema,
-  RegisterBenfekSchema
+  RegisterBenfekSchema,
+  RegisterUnreferredBenfekSchema
 } from '../DTOs/auth.dto';
 import { Container } from 'inversify';
 import { AppError } from '../utilities/errors';
@@ -114,15 +115,31 @@ export class AuthController extends BaseController {
     try {
       const data = RegisterBenfekSchema.parse(req.body);
       const user = await this.authService.registerBenfek(data);
-      ResponseUtil.success(res, user, 'Benfek registered successfully', 201);
+      return ResponseUtil.success(res, user, 'Benfek registered successfully', 201);
     } catch (error) {
       if (error instanceof ZodError) {
-        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
       }
       if (error instanceof AppError) {
-        ResponseUtil.error(res, error.message, error.statusCode, error);
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
-      ResponseUtil.error(res, 'Registration failed', 500, error);
+      return ResponseUtil.error(res, 'Registration failed', 500, error);
+    }
+  }
+
+  registerUnreferredBenfek: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const data = RegisterUnreferredBenfekSchema.parse(req.body);
+      const result = await this.authService.registerUnreferredBenfek(data);
+      return ResponseUtil.success(res, result, 'Benfek registered successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+      if (error instanceof AppError) {
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
+      }
+      return ResponseUtil.error(res, 'Registration failed', 500, error);
     }
   }
 

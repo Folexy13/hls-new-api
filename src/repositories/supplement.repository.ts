@@ -11,6 +11,11 @@ interface Supplement {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  manufacturer: string | null;
+  dosageForm: string | null;
+  budgetRange: string | null;
+  tags: any;
+  status: string;
   userId: number;
   user?: {
     id: number;

@@ -31,6 +31,11 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       userId,
       imageUrl: data.imageUrl ?? null,
       category: data.category ?? null,
+      manufacturer: data.manufacturer ?? null,
+      dosageForm: data.dosageForm ?? null,
+      budgetRange: data.budgetRange ?? null,
+      tags: data.tags ?? null,
+      status: data.status ?? 'in_stock',
     });
   }
 
