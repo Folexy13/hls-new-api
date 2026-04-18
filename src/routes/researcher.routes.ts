@@ -20,5 +20,15 @@ export const createResearcherRoutes = (container: Container): Router => {
   router.get('/packs/:code', authenticatedHandler(researcherController.getBenfekPacks));
   router.delete('/packs/:id', authenticatedHandler(researcherController.deletePack));
 
+  router.get('/notifications', authenticatedHandler(researcherController.getNotifications));
+  router.patch('/notifications/:id/read', authenticatedHandler(researcherController.markNotificationRead));
+
+  router.post('/operational-payments', authenticatedHandler(researcherController.createOperationalPayment));
+  router.get('/operational-payments', authenticatedHandler(researcherController.getOperationalPayments));
+
+  router.get('/checker/orders/:id', authenticatedHandler(researcherController.getOrderById));
+  router.get('/checker/principals/:principalId/payments', authenticatedHandler(researcherController.getPrincipalPayments));
+  router.get('/checker/principals/:principalId/account', authenticatedHandler(researcherController.getPrincipalAccount));
+
   return router;
 };

@@ -8,7 +8,13 @@ import { AuthRepository } from './Abstractions/authrepo';
 export default class AuthRepositoryImpl implements AuthRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
-  async createUser(data: RegisterUserDTO & { username?: string; phone?: string | null }): Promise<User> {
+  async createUser(
+    data: RegisterUserDTO & {
+      username?: string;
+      phone?: string | null;
+      researcherType?: "maker" | "checker" | null;
+    }
+  ): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,
@@ -17,8 +23,12 @@ export default class AuthRepositoryImpl implements AuthRepository {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone ?? null,
-        role: data.role || 'benfek'
-      }
+        role: data.role || 'benfek',
+        researcherType:
+          data.role === "researcher"
+            ? (data.researcherType ?? "maker")
+            : null,
+      } as any
     });
   }
 

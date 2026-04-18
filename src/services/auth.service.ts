@@ -70,6 +70,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        researcherType: (user as any).researcherType ?? null,
       },
       tokens: {
         accessToken: newAccessToken,
@@ -151,7 +152,12 @@ export class AuthService {
 
   private generateAccessToken(user: any): string {
     return jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        researcherType: user.researcherType ?? null,
+      },
       config.jwtSecret,
       { expiresIn: "15m" }
     );

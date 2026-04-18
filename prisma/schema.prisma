@@ -15,6 +15,21 @@ enum Role {
   wholesaler
 }
 
+enum ResearcherType {
+  maker
+  checker
+}
+
+enum OperationalPaymentType {
+  wholesaler
+  delivery
+}
+
+enum OperationalPaymentStatus {
+  pending
+  completed
+}
+
 model User {
   id            Int            @id @default(autoincrement())
   email         String         @unique
@@ -24,11 +39,15 @@ model User {
   lastName      String
   phone         String?        @unique
   role          Role           @default(benfek)
+  researcherType ResearcherType?
   refreshTokens RefreshToken[]
   userId        String?        @unique
   podcasts      Podcast[]
   supplements   Supplement[]
   researcherPacks ResearcherPack[]
+  operationalPaymentsMade OperationalPayment[] @relation("OperationalPaymentMaker")
+  operationalPaymentsConfirmed OperationalPayment[] @relation("OperationalPaymentChecker")
+  operationalPaymentsForPrincipal OperationalPayment[] @relation("OperationalPaymentPrincipal")
   carts         Cart[]
   orders        Order[]
   payments      Payment[]
@@ -40,6 +59,31 @@ model User {
   quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model OperationalPayment {
+  id            Int                     @id @default(autoincrement())
+  type          OperationalPaymentType
+  status        OperationalPaymentStatus @default(pending)
+  amount        Float
+  payeeName     String
+  payeeContact  String?                 @db.Text
+  payeeAddress  String?                 @db.Text
+  note          String?                 @db.Text
+  quizCode      String?
+  packId        String?
+
+  principalId   Int?
+  principal     User?                   @relation("OperationalPaymentPrincipal", fields: [principalId], references: [id], onDelete: SetNull)
+
+  makerId       Int
+  maker         User                    @relation("OperationalPaymentMaker", fields: [makerId], references: [id], onDelete: Cascade)
+
+  confirmedById Int?
+  confirmedBy   User?                   @relation("OperationalPaymentChecker", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 }
 
 model RefreshToken {
@@ -71,9 +115,11 @@ model Supplement {
   imageUrl    String?     // Product image URL
   category    String?     // Product category
   manufacturer String?
+  strength    String?
   dosageForm  String?
   budgetRange String?
   tags        Json?
+  wholesalers Json?
   status      String      @default("in_stock")
   userId      Int
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
