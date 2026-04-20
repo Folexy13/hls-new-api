@@ -26,7 +26,7 @@ export class ResearcherController {
 
   private isChecker(req: AuthenticatedRequest): boolean {
     if (req.user.role === 'principal') return true;
-    return req.user.role === 'researcher' && req.user.researcherType === 'checker';
+    return req.user.role === 'researcher'; // Experimental: allow all researchers access
   }
 
   private ensureChecker(req: AuthenticatedRequest, res: Response): boolean {
@@ -60,6 +60,11 @@ export class ResearcherController {
 
       if (!quizCode) {
         return ResponseUtil.error(res, 'Invalid benfek code', 404);
+      }
+
+      // Requirement: Only verified benfeks who completed registration can be accessed
+      if (!quizCode.isUsed) {
+        return ResponseUtil.error(res, 'Benfek not fully registered', 400);
       }
 
       const packs = await this.prisma.researcherPack.findMany({
@@ -121,23 +126,35 @@ export class ResearcherController {
       const where: any = {};
       let principalId: number | null = null;
 
+      // Researcher gallery visibility:
+      // - If no (valid) benfek code provided: return ONLY supplements uploaded by researchers.
+      // - If benfek code provided and resolves to a principal: include that principal's supplements too.
       if (code) {
         const quizCode = await this.prisma.quizCode.findUnique({
           where: { code },
           select: { createdBy: true },
         });
-        if (quizCode) {
-          principalId = quizCode.createdBy;
-        }
+        if (quizCode) principalId = quizCode.createdBy;
       }
 
+      const visibilityOr: any[] = [{ user: { is: { role: 'researcher' } } }];
+      if (principalId) visibilityOr.push({ userId: principalId });
+      const baseVisibility = { OR: visibilityOr };
+
       if (search) {
-        where.OR = [
-          { name: { contains: search } },
-          { description: { contains: search } },
-          { manufacturer: { contains: search } },
-          { category: { contains: search } },
+        where.AND = [
+          baseVisibility,
+          {
+            OR: [
+              { name: { contains: search } },
+              { description: { contains: search } },
+              { manufacturer: { contains: search } },
+              { category: { contains: search } },
+            ],
+          },
         ];
+      } else {
+        Object.assign(where, baseVisibility);
       }
 
       const [supplements, total] = await Promise.all([
@@ -146,6 +163,7 @@ export class ResearcherController {
           orderBy: { createdAt: 'desc' },
           skip,
           take: limit,
+          include: { user: { select: { id: true, role: true } } },
         }),
         this.prisma.supplement.count({ where }),
       ]);
@@ -156,12 +174,9 @@ export class ResearcherController {
         : (supplements as any[]).map((supplement: any) => ({ ...supplement, wholesalers: null }));
 
       const enriched = sanitizedSupplements.map((supplement: any) => {
+        const uploaderRole = String(supplement?.user?.role || 'unknown');
         const source =
-          req.user.role === 'principal'
-            ? 'principal'
-            : principalId && supplement.userId === principalId
-              ? 'principal'
-              : 'researcher';
+          principalId && supplement.userId === principalId ? 'principal' : uploaderRole;
         return { ...supplement, source };
       });
 
@@ -193,8 +208,9 @@ export class ResearcherController {
           category: data.category || null,
           manufacturer: data.manufacturer || null,
           strength: data.strength || null,
-          dosageForm: data.dosageForm || null,
-          budgetRange: data.budgetRange || null,
+          dosageForm: null, // Moved to tags
+          budgetRange: null, // Moved to tags
+          expiryDate: (data as any).expiryDate || null,
           tags: data.tags,
           wholesalers: data.wholesalers?.length ? data.wholesalers : null,
           userId: req.user.id,
@@ -221,6 +237,9 @@ export class ResearcherController {
         data: {
           ...data,
           tags: data.tags,
+          expiryDate: (data as any).expiryDate,
+          dosageForm: null, // Ensure columns stay clean
+          budgetRange: null,
           ...(data.strength !== undefined && { strength: data.strength || null }),
           ...(data.wholesalers !== undefined && {
             wholesalers: (data.wholesalers || []).length ? data.wholesalers : null,
@@ -277,24 +296,27 @@ export class ResearcherController {
         },
       });
 
+      const itemData = (data as any).items || data.supplementIds.map((id: number) => ({ id, quantity: 1 }));
+      const activeIds = itemData.map((i: any) => i.id);
+
       await this.prisma.researcherPackItem.deleteMany({
         where: {
           packId: pack.id,
-          supplementId: { notIn: data.supplementIds },
+          supplementId: { notIn: activeIds },
         },
       });
 
       await Promise.all(
-        data.supplementIds.map((supplementId) =>
+        itemData.map((item: any) =>
           this.prisma.researcherPackItem.upsert({
             where: {
               packId_supplementId: {
                 packId: pack.id,
-                supplementId,
+                supplementId: item.id,
               },
             },
-            create: { packId: pack.id, supplementId, quantity: 1 },
-            update: { quantity: 1 },
+            create: { packId: pack.id, supplementId: item.id, quantity: item.quantity },
+            update: { quantity: item.quantity },
           })
         )
       );
@@ -306,7 +328,7 @@ export class ResearcherController {
 
       if (result && data.status === 'dispatched') {
         const checkers = await (this.prisma.user.findMany({
-          where: { role: 'researcher', researcherType: 'checker' as any },
+          where: { role: 'researcher' }, // Notify all researchers for this experiment
           select: { id: true },
         }) as any);
 
