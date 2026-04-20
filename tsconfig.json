@@ -12,7 +12,7 @@
     "strict": true,
     "skipLibCheck": true,
     "sourceMap": true, // Added for debugging
-    "noEmitOnError": false // Allow build despite type errors (Express 5 compatibility issues)
+    "noEmitOnError": true //Allow build despite type errors (Express 5 compatibility issues)
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"] // Expanded exclude

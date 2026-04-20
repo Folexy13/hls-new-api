@@ -8,19 +8,9 @@ export const CreateSupplementSchema = z.object({
   imageUrl: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
-  strength: z.string().optional().nullable(),
   dosageForm: z.string().optional().nullable(),
   budgetRange: z.string().optional().nullable(),
   tags: z.record(z.array(z.string())).optional(),
-  wholesalers: z
-    .object({
-      name: z.string().optional().nullable(),
-      price: z.number().optional().nullable(),
-      contact: z.string().optional().nullable(),
-      address: z.string().optional().nullable(),
-    })
-    .optional()
-    .nullable(),
   status: z.string().optional(),
 });
 export const UpdateSupplementSchema = CreateSupplementSchema.partial();

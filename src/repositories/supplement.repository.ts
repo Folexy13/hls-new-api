@@ -1,16 +1,26 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { injectable, inject } from 'inversify';
 
-type SupplementWithUser = Prisma.SupplementGetPayload<{
-  include: {
-    user: {
-      select: {
-        id: true;
-        firstName: true;
-        lastName: true;
-        email: true;
-      };
-    };
+// Define supplement type
+interface Supplement {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+  imageUrl: string | null;
+  category: string | null;
+  manufacturer: string | null;
+  dosageForm: string | null;
+  budgetRange: string | null;
+  tags: any;
+  status: string;
+  userId: number;
+  user?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
   };
 }>;
 

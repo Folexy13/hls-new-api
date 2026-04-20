@@ -177,10 +177,11 @@ export class SupplementController extends BaseController {
       const limitNum = parseInt(limit as string);
       
       // Filter by userId if principal
-      const isPrincipal = req.user.role === 'principal';
+      const role = String(req.user.role).toLowerCase();
+      const isPrincipal = role === 'principal';
       const filterUserId = isPrincipal ? req.user.id : undefined;
       
-      console.log('Filtering supplements for principal:', { isPrincipal, userId: req.user.id, filterUserId });
+      console.log('Supplement list filter debug:', { role, isPrincipal, userId: req.user.id, filterUserId });
       
       const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
       
