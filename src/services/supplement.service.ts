@@ -1,11 +1,16 @@
 import { injectable, inject } from 'inversify';
 import { CreateSupplementDTO, UpdateSupplementDTO } from '../DTOs/supplement.dto';
-import type { Supplement } from '.prisma/client';
+import { Prisma, type Supplement } from '@prisma/client';
 import { AppError } from '../utilities/errors';
 import { SupplementRepository } from '../repositories/supplement.repository';
 
 @injectable()
 export class SupplementService {  constructor(@inject(SupplementRepository) private supplementRepository: SupplementRepository) {}
+  private toNullableJson(value: unknown) {
+    if (value === undefined) return undefined;
+    if (value === null) return Prisma.DbNull;
+    return value as Prisma.InputJsonValue;
+  }
   
   async findAll(page: number = 1, limit: number = 10, userId?: number): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
@@ -27,7 +32,10 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
 
   async create(userId: number, data: CreateSupplementDTO): Promise<Supplement> {
     return this.supplementRepository.create({
-      ...data,
+      name: data.name,
+      description: data.description,
+      price: data.price,
+      stock: data.stock,
       userId,
       imageUrl: data.imageUrl ?? null,
       category: data.category ?? null,
@@ -51,7 +59,21 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       throw new AppError('Unauthorized', 403);
     }
 
-    return this.supplementRepository.update(id, data);
+    return this.supplementRepository.update(id, {
+      name: data.name,
+      description: data.description,
+      price: data.price,
+      stock: data.stock,
+      imageUrl: data.imageUrl,
+      category: data.category,
+      manufacturer: data.manufacturer,
+      strength: data.strength,
+      dosageForm: data.dosageForm,
+      budgetRange: data.budgetRange,
+      tags: this.toNullableJson(data.tags),
+      wholesalers: this.toNullableJson(data.wholesalers),
+      status: data.status,
+    });
   }
 
   async delete(id: number, userId: number): Promise<void> {

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { injectable, inject } from 'inversify';
-import { IRepository } from '../types/types';
 
 // Define supplement type
 interface Supplement {
@@ -23,15 +22,17 @@ interface Supplement {
     lastName: string;
     email: string;
   };
-  createdAt: Date;
-  updatedAt: Date;
-}
+}>;
 
 @injectable()
-export class SupplementRepository implements IRepository<Supplement> {
+export class SupplementRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
   
-  async findAll(skip?: number, take?: number, userId?: number): Promise<{ items: Supplement[]; total: number }> {
+  async findAll(
+    skip?: number,
+    take?: number,
+    userId?: number,
+  ): Promise<{ items: SupplementWithUser[]; total: number }> {
     const where = userId ? { userId } : {};
     
     const [supplements, total] = await Promise.all([
@@ -57,12 +58,12 @@ export class SupplementRepository implements IRepository<Supplement> {
     ]);
 
     return {
-      items: supplements as any[],
+      items: supplements,
       total
     };
   }
 
-  async findById(id: number): Promise<Supplement | null> {
+  async findById(id: number): Promise<SupplementWithUser | null> {
     return this.prisma.supplement.findUnique({
       where: { id },
       include: {
@@ -78,7 +79,7 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
-  async findByUserId(userId: number): Promise<Supplement[]> {
+  async findByUserId(userId: number): Promise<SupplementWithUser[]> {
     return this.prisma.supplement.findMany({
       where: { userId },
       include: {
@@ -97,7 +98,7 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
-  async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
+  async findByNameAndBrand(name: string, brand: string): Promise<SupplementWithUser[]> {
     return this.prisma.supplement.findMany({
       where: {
         AND: [
@@ -121,11 +122,10 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
-  async create(data: Omit<Supplement, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplement> {    // Remove user property if it exists
-    const { user, ...supplementData } = data as any;
+  async create(data: Prisma.SupplementUncheckedCreateInput): Promise<SupplementWithUser> {
     
     return this.prisma.supplement.create({
-      data: supplementData,
+      data,
       include: {
         user: {
           select: {
@@ -139,12 +139,10 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
-  async update(id: number, data: Partial<Supplement>): Promise<Supplement> {    // Remove id and user properties if they exist
-    const { id: dataId, user, ...updateData } = data as any;
-    
+  async update(id: number, data: Prisma.SupplementUncheckedUpdateInput): Promise<SupplementWithUser> {
     return this.prisma.supplement.update({
       where: { id },
-      data: updateData,
+      data,
       include: {
         user: {
           select: {
@@ -163,7 +161,7 @@ export class SupplementRepository implements IRepository<Supplement> {
       where: { id }
     });
   }
-  async search(query: string, brand?: string): Promise<Supplement[]> {
+  async search(query: string, brand?: string): Promise<SupplementWithUser[]> {
     const where: any = {
       OR: [
         { name: { contains: query } },
@@ -191,7 +189,7 @@ export class SupplementRepository implements IRepository<Supplement> {
     });
   }
 
-  async updateStock(id: number, quantity: number): Promise<Supplement> {
+  async updateStock(id: number, quantity: number): Promise<SupplementWithUser> {
     return this.prisma.supplement.update({
       where: { id },
       data: {
@@ -213,12 +211,12 @@ export class SupplementRepository implements IRepository<Supplement> {
   }
 
   // Alias for updateStock - decrements stock by quantity
-  async decrementStock(id: number, quantity: number): Promise<Supplement> {
+  async decrementStock(id: number, quantity: number): Promise<SupplementWithUser> {
     return this.updateStock(id, quantity);
   }
 
   // Increment stock (for returns/restocking)
-  async incrementStock(id: number, quantity: number): Promise<Supplement> {
+  async incrementStock(id: number, quantity: number): Promise<SupplementWithUser> {
     return this.prisma.supplement.update({
       where: { id },
       data: {

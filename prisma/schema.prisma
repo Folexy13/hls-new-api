@@ -15,6 +15,21 @@ enum Role {
   wholesaler
 }
 
+enum ResearcherType {
+  maker
+  checker
+}
+
+enum OperationalPaymentType {
+  wholesaler
+  delivery
+}
+
+enum OperationalPaymentStatus {
+  pending
+  completed
+}
+
 model User {
   id            Int            @id @default(autoincrement())
   email         String         @unique
@@ -24,6 +39,7 @@ model User {
   lastName      String
   phone         String?        @unique
   role          Role           @default(benfek)
+  researcherType ResearcherType?
   refreshTokens RefreshToken[]
   userId        String?        @unique
   podcasts      Podcast[]
@@ -40,6 +56,31 @@ model User {
   quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model OperationalPayment {
+  id            Int                     @id @default(autoincrement())
+  type          OperationalPaymentType
+  status        OperationalPaymentStatus @default(pending)
+  amount        Float
+  payeeName     String
+  payeeContact  String?                 @db.Text
+  payeeAddress  String?                 @db.Text
+  note          String?                 @db.Text
+  quizCode      String?
+  packId        String?
+
+  principalId   Int?
+  principal     User?                   @relation("OperationalPaymentPrincipal", fields: [principalId], references: [id], onDelete: SetNull)
+
+  makerId       Int
+  maker         User                    @relation("OperationalPaymentMaker", fields: [makerId], references: [id], onDelete: Cascade)
+
+  confirmedById Int?
+  confirmedBy   User?                   @relation("OperationalPaymentChecker", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 }
 
 model RefreshToken {
