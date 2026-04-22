@@ -33,8 +33,22 @@ export const DispatchPackSchema = z.object({
   code: z.string().min(1, 'Benfek code is required').transform((value) => value.trim().toUpperCase()),
   packId: z.string().min(1, 'Pack ID is required'),
   packName: z.string().min(1, 'Pack name is required'),
-  supplementIds: z.array(z.number().int().positive()).min(1, 'Select at least one supplement'),
+  supplementIds: z.array(z.number().int().positive()).min(1, 'Select at least one supplement').optional(),
+  items: z.array(
+    z.object({
+      id: z.coerce.number().int().positive('Supplement ID must be valid'),
+      quantity: z.coerce.number().int().positive('Quantity must be at least 1').default(1),
+    })
+  ).min(1, 'Select at least one supplement').optional(),
   status: z.string().optional().default('dispatched'),
+}).superRefine((data, ctx) => {
+  if ((!data.supplementIds || data.supplementIds.length === 0) && (!data.items || data.items.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['supplementIds'],
+      message: 'Required',
+    });
+  }
 });
 
 export const CreateOperationalPaymentSchema = z.object({

@@ -16,6 +16,11 @@ import {
 export class ResearcherController {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
+  private truncateText(value: string, maxLength: number): string {
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+  }
+
   private ensureResearcher(req: AuthenticatedRequest, res: Response): boolean {
     if (!['researcher', 'principal'].includes(req.user.role)) {
       ResponseUtil.error(res, 'Only researchers can access this resource', 403);
@@ -77,6 +82,7 @@ export class ResearcherController {
         benfek: {
           code: quizCode.code,
           name: quizCode.benfekName,
+          fullName: quizCode.benfekName,
           phone: quizCode.benfekPhone,
           age: quizCode.benfekAge,
           gender: quizCode.benfekGender,
@@ -296,7 +302,7 @@ export class ResearcherController {
         },
       });
 
-      const itemData = (data as any).items || data.supplementIds.map((id: number) => ({ id, quantity: 1 }));
+      const itemData = (data as any).items || (data.supplementIds || []).map((id: number) => ({ id, quantity: 1 }));
       const activeIds = itemData.map((i: any) => i.id);
 
       await this.prisma.researcherPackItem.deleteMany({
@@ -369,25 +375,21 @@ export class ResearcherController {
             const qty = Number(item?.quantity || 1);
             const best = wholesaleForItem(item?.supplement);
             const margin = sell - best.price;
-            const opts = best.options.length
-              ? ` (options: ${best.options.map((o: any) => `${o.name} NGN ${o.price.toLocaleString()}`).join(', ')})`
-              : '';
             const bestLabel = best.name ? `${best.name} NGN ${best.price.toLocaleString()}` : 'N/A';
-            return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | wholesale ${bestLabel} | margin NGN ${margin.toLocaleString()}${opts}`;
+            return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | wholesale ${bestLabel} | margin NGN ${margin.toLocaleString()}`;
           });
 
           const subject = `Pack dispatched: ${result.packName} (${data.code})`;
-          const message = [
+          const baseMessage = [
             `Benfek: ${quizCode.benfekName} (${quizCode.benfekPhone})`,
             `Code: ${data.code}`,
             `Pack: ${result.packName}`,
             `Principal: ${principalName} (${quizCode.creator.email})`,
-            '',
-            'Items:',
-            ...lines,
-            '',
-            `Totals: selling NGN ${sellingTotal.toLocaleString()} | wholesale NGN ${wholesaleTotal.toLocaleString()} | principal wallet (margin) NGN ${marginTotal.toLocaleString()}`,
+            `Items: ${items.length}`,
+            `Top item: ${lines[0] || 'N/A'}`,
+            `Totals: sell NGN ${sellingTotal.toLocaleString()} | wholesale NGN ${wholesaleTotal.toLocaleString()} | margin NGN ${marginTotal.toLocaleString()}`,
           ].join('\n');
+          const message = this.truncateText(baseMessage, 240);
 
           await this.prisma.inbox.createMany({
             data: checkers.map((checker: any) => ({
