@@ -8,6 +8,7 @@ export interface CreatePaymentDTO {
   method: string;
   status: string;
   paystackReference?: string;
+  paystackTransactionId?: string;
   paystackChannel?: string;
   currency?: string;
   paidAt?: Date;
@@ -29,6 +30,7 @@ export class PaystackRepository {
         method: data.method,
         status: data.status,
         paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
         paystackChannel: data.paystackChannel,
         currency: data.currency || 'NGN',
         paidAt: data.paidAt,
@@ -53,6 +55,36 @@ export class PaystackRepository {
     return this.prisma.payment.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async upsertPaymentByOrderId(data: CreatePaymentDTO): Promise<Payment> {
+    return this.prisma.payment.upsert({
+      where: { orderId: data.orderId },
+      update: {
+        amount: data.amount,
+        method: data.method,
+        status: data.status,
+        paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
+        paystackChannel: data.paystackChannel,
+        currency: data.currency || 'NGN',
+        paidAt: data.paidAt,
+        metadata: data.metadata,
+      },
+      create: {
+        userId: data.userId,
+        orderId: data.orderId,
+        amount: data.amount,
+        method: data.method,
+        status: data.status,
+        paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
+        paystackChannel: data.paystackChannel,
+        currency: data.currency || 'NGN',
+        paidAt: data.paidAt,
+        metadata: data.metadata,
+      },
     });
   }
 
