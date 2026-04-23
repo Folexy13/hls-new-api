@@ -38,6 +38,9 @@ model User {
   firstName     String
   lastName      String
   phone         String?        @unique
+  whatsappNumber String?       @db.Text
+  deliveryAddress String?      @db.Text
+  dropOffAddress String?       @db.Text
   role          Role           @default(benfek)
   researcherType ResearcherType?
   refreshTokens RefreshToken[]
@@ -56,6 +59,7 @@ model User {
   withdrawals   Withdrawal[]
   nutrient      NutrientType?  // One-to-one relation, no fields/references here
   gamePoints    BenfekGamePoint?
+  supportTickets SupportTicket[]
   quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -218,6 +222,7 @@ model Payment {
   method            String    // paystack, bank_transfer, cash, etc.
   status            String    @default("pending") // pending, success, failed, refunded
   paystackReference String?   @unique // Paystack transaction reference
+  paystackTransactionId String? @unique
   paystackChannel   String?   // card, bank, ussd, qr, mobile_money, etc.
   currency          String    @default("NGN")
   paidAt            DateTime?
@@ -360,5 +365,17 @@ model QuizCode {
   
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model SupportTicket {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  subject   String
+  message   String   @db.Text
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
