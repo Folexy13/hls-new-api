@@ -10,6 +10,46 @@ import { SaveGamePointsSchema } from '../DTOs/benfek.dto';
 export class BenfekController {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
+  getMyPacks = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+
+      const quizCodes = await this.prisma.quizCode.findMany({
+        where: { usedBy: userId, isUsed: true },
+        select: { code: true },
+      });
+
+      if (!quizCodes.length) {
+        return ResponseUtil.success(res, [], 'Benfek packs retrieved');
+      }
+
+      const packs = await this.prisma.researcherPack.findMany({
+        where: {
+          quizCode: { in: quizCodes.map((quizCode) => quizCode.code) },
+          status: 'dispatched',
+        },
+        include: {
+          items: {
+            include: {
+              supplement: true,
+            },
+          },
+        },
+        orderBy: [
+          { updatedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      });
+
+      return ResponseUtil.success(res, packs, 'Benfek packs retrieved');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve benfek packs', 500, error);
+    }
+  };
+
   saveGamePoints = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const data = SaveGamePointsSchema.parse(req.body);

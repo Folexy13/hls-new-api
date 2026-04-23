@@ -45,6 +45,9 @@ model User {
   podcasts      Podcast[]
   supplements   Supplement[]
   researcherPacks ResearcherPack[]
+  operationalPaymentsMade OperationalPayment[] @relation("OperationalPaymentMaker")
+  operationalPaymentsConfirmed OperationalPayment[] @relation("OperationalPaymentChecker")
+  operationalPaymentsForPrincipal OperationalPayment[] @relation("OperationalPaymentPrincipal")
   carts         Cart[]
   orders        Order[]
   payments      Payment[]
@@ -112,9 +115,11 @@ model Supplement {
   imageUrl    String?     // Product image URL
   category    String?     // Product category
   manufacturer String?
+  strength    String?
   dosageForm  String?
   budgetRange String?
   tags        Json?
+  wholesalers Json?
   status      String      @default("in_stock")
   userId      Int
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -226,7 +231,7 @@ model Inbox {
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject   String
-  message   String
+  message   String   @db.Text
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

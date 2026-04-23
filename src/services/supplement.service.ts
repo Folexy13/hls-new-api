@@ -40,9 +40,11 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       imageUrl: data.imageUrl ?? null,
       category: data.category ?? null,
       manufacturer: data.manufacturer ?? null,
+      strength: data.strength ?? null,
       dosageForm: data.dosageForm ?? null,
       budgetRange: data.budgetRange ?? null,
-      tags: data.tags ?? null,
+      tags: this.toNullableJson(data.tags),
+      wholesalers: this.toNullableJson(data.wholesalers),
       status: data.status ?? 'in_stock',
     });
   }
