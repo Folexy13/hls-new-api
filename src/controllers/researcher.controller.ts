@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { ZodError } from 'zod';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
+import { NotificationService } from '../services/notification.service';
 import {
   DispatchPackSchema,
   CreateOperationalPaymentSchema,
@@ -14,7 +15,10 @@ import {
 
 @injectable()
 export class ResearcherController {
-  constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
+  constructor(
+    @inject('PrismaClient') private prisma: PrismaClient,
+    @inject(NotificationService) private notificationService: NotificationService
+  ) {}
 
   private truncateText(value: string, maxLength: number): string {
     if (value.length <= maxLength) return value;
@@ -400,6 +404,12 @@ export class ResearcherController {
             })),
           });
         }
+
+        await this.notificationService.sendPackAvailableMessage({
+          phone: quizCode.benfekPhone,
+          packName: result.packName,
+          code: data.code,
+        }).catch(() => undefined);
       }
 
       return ResponseUtil.success(res, { pack: result }, 'Pack dispatched to benfek');

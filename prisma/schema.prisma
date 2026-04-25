@@ -118,6 +118,7 @@ model Supplement {
   strength    String?
   dosageForm  String?
   budgetRange String?
+  expiryDate  DateTime?
   tags        Json?
   wholesalers Json?
   status      String      @default("in_stock")

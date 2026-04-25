@@ -5,11 +5,13 @@ import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBen
 import AuthRepositoryImpl from "../repositories/auth.repo";
 import { ConflictError, UnauthorizedError } from "../utilities/errors";
 import { config } from "../config/config";
+import { NotificationService } from "../services/notification.service";
 
 @injectable()
 export class AuthService {
   constructor(
-    @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl
+    @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {}
 
   async register(data: RegisterUserDTO) {
@@ -44,6 +46,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedError("Invalid email or password.");
     }
+
+    await this.notificationService.notifyPreferredVendorAcceptance(user).catch(() => undefined);
 
     return this.createAuthResponse(user);
   }

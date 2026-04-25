@@ -5,10 +5,14 @@ import { ZodError } from 'zod';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
 import { SaveGamePointsSchema } from '../DTOs/benfek.dto';
+import { NotificationService } from '../services/notification.service';
 
 @injectable()
 export class BenfekController {
-  constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
+  constructor(
+    @inject('PrismaClient') private prisma: PrismaClient,
+    @inject(NotificationService) private notificationService: NotificationService
+  ) {}
 
   getMyPacks = async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -114,6 +118,43 @@ export class BenfekController {
       return ResponseUtil.success(res, { gamePoints }, 'Game points retrieved');
     } catch (error) {
       return ResponseUtil.error(res, 'Failed to retrieve game points', 500, error);
+    }
+  };
+
+  sendInvoiceImage = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { imageUrl, caption, phone, email } = req.body as {
+        imageUrl?: string;
+        caption?: string;
+        phone?: string;
+        email?: string;
+      };
+
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        return ResponseUtil.error(res, 'invoice image URL is required', 400);
+      }
+
+      const targetPhone = phone?.trim() || req.user.phone;
+      const targetEmail = email?.trim() || req.user.email;
+      const resolvedCaption =
+        typeof caption === 'string' && caption.trim().length > 0
+          ? caption.trim()
+          : 'Please review your HLS invoice.';
+
+      const result = await this.notificationService.sendInvoiceImage({
+        phone: targetPhone,
+        email: targetEmail,
+        imageUrl: imageUrl.trim(),
+        caption: resolvedCaption,
+      });
+
+      if (!result.success) {
+        return ResponseUtil.error(res, 'Failed to send invoice notification', 500, result.reason);
+      }
+
+      return ResponseUtil.success(res, { sent: true, result }, 'Invoice notification sent');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to send invoice image', 500, error);
     }
   };
 }
