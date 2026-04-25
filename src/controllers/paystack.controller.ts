@@ -1,5 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { PaystackService } from '../services/paystack.service';
 import { CartService } from '../services/cart.service';
 import { PaystackRepository } from '../repositories/paystack.repository';
@@ -8,12 +9,18 @@ import { SupplementRepository } from '../repositories/supplement.repository';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { BaseController } from './base.controller';
 import { Container } from 'inversify';
-import { PaystackInitializeSchema, PaystackInitializeDTO } from '../DTOs/paystack.dto';
+import {
+  PaystackInitializeSchema,
+  PaystackInitializeDTO,
+  PaystackPackCheckoutDTO,
+  PaystackPackCheckoutSchema,
+} from '../DTOs/paystack.dto';
 
 @injectable()
 export class PaystackController extends BaseController {
   constructor(
     container: Container,
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(CartService) private cartService: CartService,
     @inject(PaystackRepository) private paystackRepository: PaystackRepository,
     @inject(OrderRepository) private orderRepository: OrderRepository,
@@ -56,7 +63,7 @@ export class PaystackController extends BaseController {
    *                     reference:
    *                       type: string
    */
-  async initializeCheckout(req: AuthenticatedRequest, res: Response) {
+  initializeCheckout = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const data: PaystackInitializeDTO = PaystackInitializeSchema.parse(req.body);
       const result = await PaystackService.initializeTransaction(data);
@@ -64,7 +71,7 @@ export class PaystackController extends BaseController {
     } catch (error: any) {
       return res.status(400).json({ message: error?.message || 'Invalid payload.' });
     }
-  }
+  };
 
   /**
    * @swagger
@@ -86,7 +93,7 @@ export class PaystackController extends BaseController {
    *       200:
    *         description: Paystack checkout initialized
    */
-  async checkoutFromCart(req: AuthenticatedRequest, res: Response) {
+  checkoutFromCart = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user.id;
       const email = req.user.email;
@@ -122,7 +129,7 @@ export class PaystackController extends BaseController {
       const result = await PaystackService.initializeTransaction({ 
         email, 
         amount: Math.round(total * 100), // Convert to kobo
-        metadata 
+        metadata,
       });
 
       return res.status(200).json({
@@ -134,7 +141,111 @@ export class PaystackController extends BaseController {
       console.error('Checkout error:', error);
       return res.status(500).json({ message: error?.response?.data?.message || 'Paystack checkout failed.' });
     }
-  }
+  };
+
+  checkoutPack = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const email = req.user.email;
+
+      if (!userId || !email) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const data: PaystackPackCheckoutDTO = PaystackPackCheckoutSchema.parse(req.body);
+
+      const quizCodes = await this.prisma.quizCode.findMany({
+        where: { usedBy: userId, isUsed: true },
+        select: { code: true },
+      });
+
+      if (!quizCodes.length) {
+        return res.status(404).json({ message: 'No active benfek quiz code found for this account.' });
+      }
+
+      const pack = await this.prisma.researcherPack.findFirst({
+        where: {
+          packId: data.packId,
+          quizCode: { in: quizCodes.map((item) => item.code) },
+          status: 'dispatched',
+        },
+        include: {
+          items: {
+            include: {
+              supplement: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      if (!pack || pack.items.length === 0) {
+        return res.status(404).json({ message: 'Dispatched pack not found or has no payable supplements.' });
+      }
+
+      const total = pack.items.reduce(
+        (sum, item) => sum + Number(item.supplement.price) * Number(item.quantity || 1),
+        0
+      );
+      const totalQuantity = pack.items.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+
+      const order = await this.orderRepository.create({
+        userId,
+        total,
+        totalQuantity,
+        status: 'pending',
+        shippingAddress: data.shippingAddress,
+        notes: `Pack checkout for ${pack.packName}`,
+      });
+
+      await Promise.all(
+        pack.items.map((item) =>
+          this.orderRepository.addOrderItem({
+            orderId: order.id,
+            supplementId: item.supplementId,
+            quantity: item.quantity,
+            price: item.supplement.price,
+            productName: item.supplement.name,
+          })
+        )
+      );
+
+      const metadata = {
+        checkoutType: 'pack',
+        packId: pack.packId,
+        packName: pack.packName,
+        quizCode: pack.quizCode,
+        userId,
+        orderId: order.id,
+        orderNumber: (order as any).orderNumber,
+        shippingAddress: data.shippingAddress,
+      };
+
+      const result = await PaystackService.initializeTransaction({
+        email,
+        amount: Math.round(total * 100),
+        metadata,
+        callbackUrl: data.callbackUrl,
+      });
+
+      return res.status(200).json({
+        ...result,
+        orderId: order.id,
+        orderNumber: (order as any).orderNumber,
+        packId: pack.packId,
+        packName: pack.packName,
+      });
+    } catch (error: any) {
+      console.error('Pack checkout error:', error);
+      return res.status(500).json({ message: error?.response?.data?.message || error?.message || 'Pack checkout failed.' });
+    }
+  };
 
   /**
    * @swagger
@@ -152,7 +263,7 @@ export class PaystackController extends BaseController {
    *       200:
    *         description: Payment verified and order completed
    */
-  async verifyCheckout(req: AuthenticatedRequest, res: Response) {
+  verifyCheckout = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { reference } = req.params;
       if (!reference) {
@@ -190,6 +301,7 @@ export class PaystackController extends BaseController {
           method: 'paystack',
           status: 'success',
           paystackReference: reference as string,
+          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
           paystackChannel: result.data.channel,
           currency: result.data.currency,
           paidAt: new Date(result.data.paid_at),
@@ -213,6 +325,8 @@ export class PaystackController extends BaseController {
           data: {
             orderId,
             orderNumber: metadata.orderNumber,
+            packId: metadata.packId,
+            packName: metadata.packName,
             amount: result.data.amount / 100,
             status: 'success',
             channel: result.data.channel
@@ -240,7 +354,7 @@ export class PaystackController extends BaseController {
       console.error('Verification error:', error);
       return res.status(500).json({ message: error?.response?.data?.message || 'Paystack verification failed.' });
     }
-  }
+  };
 }
 
 /**

@@ -8,6 +8,7 @@ export interface CreatePaymentDTO {
   method: string;
   status: string;
   paystackReference?: string;
+  paystackTransactionId?: string;
   paystackChannel?: string;
   currency?: string;
   paidAt?: Date;
@@ -29,6 +30,7 @@ export class PaystackRepository {
         method: data.method,
         status: data.status,
         paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
         paystackChannel: data.paystackChannel,
         currency: data.currency || 'NGN',
         paidAt: data.paidAt,

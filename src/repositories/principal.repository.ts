@@ -15,6 +15,15 @@ export class PrincipalRepository {
     firstName: string;
     lastName: string;
     phone?: string;
+    profileImageUrl?: string;
+    profession?: string;
+    currentPlaceOfWork?: string;
+    licenseNumber?: string;
+    yearsOfExperience?: string;
+    preferredPaymentMethod?: string;
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
   }): Promise<User> {
     return this.prisma.user.create({
       data: {
@@ -24,6 +33,15 @@ export class PrincipalRepository {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
+        profileImageUrl: data.profileImageUrl,
+        profession: data.profession,
+        currentPlaceOfWork: data.currentPlaceOfWork,
+        licenseNumber: data.licenseNumber,
+        yearsOfExperience: data.yearsOfExperience,
+        preferredPaymentMethod: data.preferredPaymentMethod,
+        bankName: data.bankName,
+        accountNumber: data.accountNumber,
+        accountName: data.accountName,
         role: 'principal',
       },
     });
@@ -76,6 +94,15 @@ export class PrincipalRepository {
       firstName: string;
       lastName: string;
       phone: string;
+      profileImageUrl: string;
+      profession: string;
+      currentPlaceOfWork: string;
+      licenseNumber: string;
+      yearsOfExperience: string;
+      preferredPaymentMethod: string;
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
     }>
   ): Promise<User> {
     return this.prisma.user.update({

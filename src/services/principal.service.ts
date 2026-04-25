@@ -44,6 +44,15 @@ export class PrincipalService {
       firstName: data.firstName,
       lastName: data.lastName,
       phone: data.phone,
+      profileImageUrl: data.profileImageUrl,
+      profession: data.profession,
+      currentPlaceOfWork: data.currentPlaceOfWork,
+      licenseNumber: data.licenseNumber,
+      yearsOfExperience: data.yearsOfExperience,
+      preferredPaymentMethod: data.preferredPaymentMethod,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      accountName: data.accountName,
     });
 
     const { password, ...userWithoutPassword } = user;
@@ -100,11 +109,29 @@ export class PrincipalService {
       firstName: string;
       lastName: string;
       phone: string;
+      profileImageUrl: string;
+      profession: string;
+      currentPlaceOfWork: string;
+      licenseNumber: string;
+      yearsOfExperience: string;
+      preferredPaymentMethod: string;
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
     }> = {
       email: data.email,
       firstName: data.firstName,
       lastName: data.lastName,
       phone: data.phone,
+      profileImageUrl: data.profileImageUrl,
+      profession: data.profession,
+      currentPlaceOfWork: data.currentPlaceOfWork,
+      licenseNumber: data.licenseNumber,
+      yearsOfExperience: data.yearsOfExperience,
+      preferredPaymentMethod: data.preferredPaymentMethod,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      accountName: data.accountName,
     };
 
     if (data.password) {

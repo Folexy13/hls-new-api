@@ -10,6 +10,18 @@ const BaseProfileSchema = z.object({
   phone: z.string().min(1, 'Phone is required').optional(),
 });
 
+const PrincipalExtrasSchema = z.object({
+  profileImageUrl: z.string().url('Invalid image URL').optional(),
+  profession: z.string().optional(),
+  currentPlaceOfWork: z.string().optional(),
+  licenseNumber: z.string().optional(),
+  yearsOfExperience: z.string().optional(),
+  preferredPaymentMethod: z.string().optional(),
+  bankName: z.string().optional(),
+  accountNumber: z.string().optional(),
+  accountName: z.string().optional(),
+});
+
 const BenfekProfileExtrasSchema = z.object({
   allergies: z.string().optional(),
   scares: z.string().optional(),
@@ -27,8 +39,8 @@ export const UpdateWholesalerProfileSchema = BaseProfileSchema.partial();
 export const CreateResearcherProfileSchema = BaseProfileSchema;
 export const UpdateResearcherProfileSchema = BaseProfileSchema.partial();
 
-export const CreatePrincipalProfileSchema = BaseProfileSchema;
-export const UpdatePrincipalProfileSchema = BaseProfileSchema.partial();
+export const CreatePrincipalProfileSchema = BaseProfileSchema.merge(PrincipalExtrasSchema);
+export const UpdatePrincipalProfileSchema = BaseProfileSchema.partial().merge(PrincipalExtrasSchema.partial());
 
 export const CreateBenfekProfileSchema = BaseProfileSchema.merge(BenfekProfileExtrasSchema);
 export const UpdateBenfekProfileSchema = BaseProfileSchema.partial().merge(BenfekProfileExtrasSchema.partial());
