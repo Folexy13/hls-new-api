@@ -14,6 +14,9 @@ export const createBenfekRoutes = (container: Container): Router => {
   router.put('/password', authGuard.verify(), authenticatedHandler(benfekController.changePassword));
   router.get('/orders', authGuard.verify(), authenticatedHandler(benfekController.getOrders));
   router.get('/packs', authGuard.verify(), authenticatedHandler(benfekController.getMyPacks));
+  router.get('/orders', authGuard.verify(), authenticatedHandler(benfekController.getMyOrders));
+  router.get('/support', authGuard.verify(), authenticatedHandler(benfekController.getMySupportTickets));
+  router.post('/support', authGuard.verify(), authenticatedHandler(benfekController.createSupportTicket));
   router.post('/game-points', authGuard.verify(), authenticatedHandler(benfekController.saveGamePoints));
   router.get('/game-points/me', authGuard.verify(), authenticatedHandler(benfekController.getMyGamePoints));
   router.post('/invoice', authGuard.verify(), authenticatedHandler(benfekController.sendInvoiceImage));

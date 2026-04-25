@@ -58,6 +58,36 @@ export class PaystackRepository {
     });
   }
 
+  async upsertPaymentByOrderId(data: CreatePaymentDTO): Promise<Payment> {
+    return this.prisma.payment.upsert({
+      where: { orderId: data.orderId },
+      update: {
+        amount: data.amount,
+        method: data.method,
+        status: data.status,
+        paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
+        paystackChannel: data.paystackChannel,
+        currency: data.currency || 'NGN',
+        paidAt: data.paidAt,
+        metadata: data.metadata,
+      },
+      create: {
+        userId: data.userId,
+        orderId: data.orderId,
+        amount: data.amount,
+        method: data.method,
+        status: data.status,
+        paystackReference: data.paystackReference,
+        paystackTransactionId: data.paystackTransactionId,
+        paystackChannel: data.paystackChannel,
+        currency: data.currency || 'NGN',
+        paidAt: data.paidAt,
+        metadata: data.metadata,
+      },
+    });
+  }
+
   async getPaymentsByUserId(userId: number, skip?: number, take?: number): Promise<{ payments: Payment[]; total: number }> {
     const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
