@@ -15,7 +15,7 @@ import {
   PaystackPackCheckoutDTO,
   PaystackPackCheckoutSchema,
 } from '../DTOs/paystack.dto';
-
+ 
 @injectable()
 export class PaystackController extends BaseController {
   constructor(
