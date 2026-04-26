@@ -5,6 +5,7 @@ import { Container } from 'inversify';
 import { ResponseUtil } from '../utilities/response.utility';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { PrincipalService } from '../services/principal.service';
+import { NotificationService } from '../services/notification.service';
 import { CreateBenfekRecordSchema, CreatePrincipalUserSchema, UpdatePrincipalUserSchema } from '../DTOs/principal.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 
@@ -12,7 +13,8 @@ import { PaginationUtil } from '../utilities/pagination.utility';
 export class PrincipalController extends BaseController {
   constructor(
     container: Container,
-    @inject(PrincipalService) private principalService: PrincipalService
+    @inject(PrincipalService) private principalService: PrincipalService,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
   }
@@ -45,6 +47,12 @@ export class PrincipalController extends BaseController {
       // Change: Create a QuizCode instead of a direct User
       // This allows the Benfek to use the code to register themselves later
       const benfek = await this.principalService.createBenfekRecord(req.user.id, data);
+
+      await this.notificationService.sendBenfekCodeMessage({
+        phone: data.benfekPhone,
+        code: benfek.code,
+        benfekName: data.benfekName,
+      }).catch(() => undefined);
       
       return ResponseUtil.success(res, benfek, 'Benfek created and Quiz Code generated successfully', 201);
     } catch (error) {

@@ -33,6 +33,7 @@ import { PrincipalService } from '../services/principal.service';
 import { PrincipalController } from '../controllers/principal.controller';
 import { ResearcherController } from '../controllers/researcher.controller';
 import { BenfekController } from '../controllers/benfek.controller';
+import { NotificationService } from '../services/notification.service';
 
 const container = new Container();
 
@@ -68,6 +69,7 @@ container.bind<WalletService>(WalletService).toSelf();
 container.bind<PodcastService>(PodcastService).toSelf();
 container.bind<CartService>(CartService).toSelf();
 container.bind<SupplementService>(SupplementService).toSelf();
+container.bind<NotificationService>(NotificationService).toSelf();
 container.bind<PrincipalService>(PrincipalService).toSelf();
 
 // Bind controllers

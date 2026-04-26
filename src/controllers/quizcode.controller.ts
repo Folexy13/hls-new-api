@@ -2,6 +2,7 @@ import { Request, RequestHandler, Response } from 'express';
 import { injectable, inject } from 'inversify';
 import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
+import { NotificationService } from '../services/notification.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
@@ -10,7 +11,8 @@ import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, Comple
 export class QuizCodeController extends BaseController {
   constructor(
     container: Container,
-    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository
+    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
   }
@@ -81,6 +83,14 @@ export class QuizCodeController extends BaseController {
         medications: data.medications,
         hasCurrentCondition: data.hasCurrentCondition,
       });
+
+      await this.notificationService
+        .sendBenfekCodeMessage({
+          phone: data.benfekPhone,
+          code: quizCode.code,
+          benfekName: data.benfekName,
+        })
+        .catch(() => undefined);
 
       ResponseUtil.success(res, quizCode, 'Quiz code created successfully', 201);
     } catch (error: any) {

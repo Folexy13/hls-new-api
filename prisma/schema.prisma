@@ -41,6 +41,17 @@ model User {
   whatsappNumber String?       @db.Text
   deliveryAddress String?      @db.Text
   dropOffAddress String?       @db.Text
+  preferredPharmacyName String? @db.Text
+  preferredPharmacyPhone String? @db.Text
+  profileImageUrl String?      @db.Text
+  profession String?           @db.Text
+  currentPlaceOfWork String?   @db.Text
+  licenseNumber String?        @db.Text
+  yearsOfExperience String?    @db.Text
+  preferredPaymentMethod String? @db.Text
+  bankName String?             @db.Text
+  accountNumber String?        @db.Text
+  accountName String?          @db.Text
   role          Role           @default(benfek)
   researcherType ResearcherType?
   refreshTokens RefreshToken[]
@@ -122,6 +133,7 @@ model Supplement {
   strength    String?
   dosageForm  String?
   budgetRange String?
+  expiryDate  DateTime?
   tags        Json?
   wholesalers Json?
   status      String      @default("in_stock")
