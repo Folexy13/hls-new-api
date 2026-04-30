@@ -6,6 +6,7 @@ import { NotificationService } from '../services/notification.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
+import { formatHealthField } from '../utilities/health-field.utility';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -81,7 +82,8 @@ export class QuizCodeController extends BaseController {
         scares: data.scares,
         familyCondition: data.familyCondition,
         medications: data.medications,
-        hasCurrentCondition: data.hasCurrentCondition,
+        currentConditions: data.currentConditions,
+        hasCurrentCondition: data.hasCurrentCondition ?? Boolean(data.currentConditions?.length),
       });
 
       await this.notificationService
@@ -514,11 +516,12 @@ export class QuizCodeController extends BaseController {
         registrationStatus: code.isUsed ? 'registered' : 'not_registered',
         usedAt: code.usedAt,
         createdAt: code.createdAt,
-        allergies: code.allergies,
-        scares: code.scares,
-        familyCondition: code.familyCondition,
-        medications: code.medications,
+        allergies: formatHealthField(code.allergies),
+        scares: formatHealthField(code.scares),
+        familyCondition: formatHealthField(code.familyCondition),
+        medications: formatHealthField(code.medications),
         hasCurrentCondition: code.hasCurrentCondition,
+        currentConditions: (code as any).currentConditions ?? undefined,
       }));
 
       ResponseUtil.success(res, {

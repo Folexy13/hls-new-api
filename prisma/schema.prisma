@@ -68,6 +68,7 @@ model User {
   inbox         Inbox[]
   wallet        Wallet?
   withdrawals   Withdrawal[]
+  principalCredits PrincipalCredit[]
   nutrient      NutrientType?  // One-to-one relation, no fields/references here
   gamePoints    BenfekGamePoint?
   supportTickets SupportTicket[]
@@ -168,6 +169,14 @@ model ResearcherPackItem {
   supplementId Int
   supplement   Supplement     @relation(fields: [supplementId], references: [id], onDelete: Cascade)
   quantity     Int            @default(1)
+  selectedWholesalerName String?
+  selectedWholesalerPrice Float?
+  selectedWholesalerContact String?
+  selectedWholesalerAddress String?
+  selectedWholesalerDetails Json?
+  requiresReselection Boolean @default(false)
+  dispatchedWithoutWholesaler Boolean @default(false)
+  effectiveMarkupFactor Float @default(1.3)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -260,6 +269,7 @@ model Wallet {
   userId        Int          @unique
   user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   withdrawals   Withdrawal[]
+  principalCredits PrincipalCredit[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
@@ -275,8 +285,38 @@ model Withdrawal {
   bankName      String
   accountNumber String
   accountName   String
+  transferReference String?
+  transferRecipientCode String?
   month         Int      // To track monthly withdrawals
   year          Int      // To track monthly withdrawals
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PrincipalCredit {
+  id            Int      @id @default(autoincrement())
+  principalId   Int
+  principal     User     @relation(fields: [principalId], references: [id], onDelete: Cascade)
+  walletId      Int
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  quizCode      String
+  packDbId      Int?
+  packId        String
+  packName      String
+  benfekName    String
+  orderId       Int?
+  paymentId     Int?
+  paymentReference String?
+  supplement    String   @db.Text
+  amount        Float
+  costPrice     Float
+  markupFactor  Float    @default(1.3)
+  taxAmount     Float    @default(0)
+  serviceChargeAmount Float @default(0)
+  hlsCommissionAmount Float @default(0)
+  principalShare Float   @default(0)
+  status        String   @default("unresolved")
+  details       Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -369,10 +409,11 @@ model QuizCode {
   lifestylePriority String?  @db.Text
   preferenceDrugForm String? @db.Text
   preferenceBudget  Float?
-  allergies         String?   @db.Text
-  scares            String?   @db.Text  // Health issues that scare them
-  familyCondition   String?   @db.Text  // Family's notable health condition
-  medications       String?   @db.Text  // Current medications
+  allergies         Json?
+  scares            Json?     // Health issues that scare them
+  familyCondition   Json?     // Family's notable health condition
+  medications       Json?     // Current medications
+  currentConditions Json?
   hasCurrentCondition Boolean @default(false)
   
   createdAt         DateTime  @default(now())

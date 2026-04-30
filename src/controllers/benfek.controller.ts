@@ -11,6 +11,8 @@ import {
   UpdateBenfekProfileSchema,
 } from '../DTOs/benfek.dto';
 import { NotificationService } from '../services/notification.service';
+import { z } from 'zod';
+import { formatHealthField } from '../utilities/health-field.utility';
 
 @injectable()
 export class BenfekController {
@@ -68,14 +70,50 @@ export class BenfekController {
             lastName: true,
             email: true,
             phone: true,
+            whatsappNumber: true,
+            profession: true,
+            currentPlaceOfWork: true,
           },
         },
       },
     });
 
+    let resolvedUser = user;
+    const principalProfession = quizCode?.creator?.profession?.trim().toLowerCase();
+    const principalPharmacyName = quizCode?.creator?.currentPlaceOfWork?.trim();
+    const principalPharmacyPhone =
+      quizCode?.creator?.phone?.trim() || quizCode?.creator?.whatsappNumber?.trim() || undefined;
+
+    if (
+      !resolvedUser.preferredPharmacyName?.trim() &&
+      principalProfession === 'pharmacy' &&
+      principalPharmacyName
+    ) {
+      resolvedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          preferredPharmacyName: principalPharmacyName,
+          preferredPharmacyPhone: resolvedUser.preferredPharmacyPhone?.trim() || principalPharmacyPhone,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          whatsappNumber: true,
+          deliveryAddress: true,
+          dropOffAddress: true,
+          preferredPharmacyName: true,
+          preferredPharmacyPhone: true,
+          role: true,
+        },
+      });
+    }
+
     return {
-      ...user,
-      fullName: `${user.firstName} ${user.lastName}`.trim(),
+      ...resolvedUser,
+      fullName: `${resolvedUser.firstName} ${resolvedUser.lastName}`.trim(),
       quizCode: quizCode
         ? {
             code: quizCode.code,
@@ -100,17 +138,24 @@ export class BenfekController {
               },
             },
             health: {
-              allergies: quizCode.allergies,
-              scares: quizCode.scares,
-              familyCondition: quizCode.familyCondition,
-              medications: quizCode.medications,
+              allergies: formatHealthField(quizCode.allergies),
+              scares: formatHealthField(quizCode.scares),
+              familyCondition: formatHealthField(quizCode.familyCondition),
+              medications: formatHealthField(quizCode.medications),
               hasCurrentCondition: quizCode.hasCurrentCondition,
+              currentConditions: (quizCode as any).currentConditions ?? undefined,
             },
             principal: quizCode.creator,
           }
         : null,
     };
   }
+
+  private readonly supportTicketSchema = z.object({
+    category: z.string().trim().min(1, 'Category is required'),
+    subject: z.string().trim().min(1, 'Subject is required'),
+    message: z.string().trim().min(1, 'Message is required'),
+  });
 
   getProfile = async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -599,9 +644,167 @@ export class BenfekController {
         ],
       });
 
-      return ResponseUtil.success(res, packs, 'Benfek packs retrieved');
+      const packPayments = await this.prisma.payment.findMany({
+        where: {
+          userId,
+          status: 'success',
+        },
+        select: {
+          id: true,
+          status: true,
+          paidAt: true,
+          paystackReference: true,
+          metadata: true,
+          order: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      const paymentByPackId = new Map<
+        string,
+        {
+          status: string;
+          paidAt: Date | null;
+          paystackReference: string | null;
+          orderId: number;
+          orderStatus: string;
+        }
+      >();
+
+      for (const payment of packPayments) {
+        if (!payment.metadata) continue;
+
+        try {
+          const metadata = JSON.parse(payment.metadata) as { packId?: unknown };
+          const packId = typeof metadata.packId === 'string' ? metadata.packId.trim() : '';
+          if (!packId || paymentByPackId.has(packId)) continue;
+
+          paymentByPackId.set(packId, {
+            status: payment.status,
+            paidAt: payment.paidAt,
+            paystackReference: payment.paystackReference ?? null,
+            orderId: payment.order.id,
+            orderStatus: payment.order.status,
+          });
+        } catch {
+          // Ignore malformed metadata and keep building the remaining pack state.
+        }
+      }
+
+      const packsWithPaymentState = packs.map((pack) => {
+        const payment = paymentByPackId.get(pack.packId);
+
+        return {
+          ...pack,
+          payment: payment
+            ? {
+                isPaid: true,
+                ...payment,
+              }
+            : {
+                isPaid: false,
+                status: null,
+                paidAt: null,
+                paystackReference: null,
+                orderId: null,
+                orderStatus: null,
+              },
+        };
+      });
+
+      return ResponseUtil.success(res, packsWithPaymentState, 'Benfek packs retrieved');
     } catch (error) {
       return ResponseUtil.error(res, 'Failed to retrieve benfek packs', 500, error);
+    }
+  };
+
+  getSupportTickets = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+
+      const tickets = await this.prisma.inbox.findMany({
+        where: {
+          userId,
+          subject: {
+            startsWith: '[Support]',
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return ResponseUtil.success(
+        res,
+        {
+          tickets: tickets.map((ticket) => {
+            const [prefixedCategory, ...messageParts] = ticket.message.split('\n\n');
+            const category = prefixedCategory.startsWith('Category: ')
+              ? prefixedCategory.replace('Category: ', '').trim()
+              : 'General';
+
+            return {
+              id: ticket.id,
+              category,
+              subject: ticket.subject.replace(/^\[Support\]\s*/, '').trim(),
+              message: messageParts.join('\n\n').trim() || ticket.message,
+              status: ticket.isRead ? 'resolved' : 'open',
+              createdAt: ticket.createdAt,
+              updatedAt: ticket.updatedAt,
+            };
+          }),
+        },
+        'Support tickets retrieved'
+      );
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve support tickets', 500, error);
+    }
+  };
+
+  createSupportTicket = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+
+      const data = this.supportTicketSchema.parse(req.body);
+      const ticket = await this.prisma.inbox.create({
+        data: {
+          userId,
+          subject: `[Support] ${data.subject}`,
+          message: `Category: ${data.category}\n\n${data.message}`,
+          isRead: false,
+        },
+      });
+
+      return ResponseUtil.success(
+        res,
+        {
+          ticket: {
+            id: ticket.id,
+            category: data.category,
+            subject: data.subject,
+            message: data.message,
+            status: 'open',
+            createdAt: ticket.createdAt,
+            updatedAt: ticket.updatedAt,
+          },
+        },
+        'Support ticket created',
+        201
+      );
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+      return ResponseUtil.error(res, 'Failed to create support ticket', 500, error);
     }
   };
 

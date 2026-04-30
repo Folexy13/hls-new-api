@@ -1,5 +1,6 @@
 import { inject, injectable } from 'inversify';
 import bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 import { PrincipalRepository } from '../repositories/principal.repository';
 import { WalletRepository } from '../repositories/wallet.repository';
 import { WithdrawalRepository } from '../repositories/withdrawal.repository';
@@ -9,6 +10,7 @@ import { CreateBenfekRecordDTO, CreateBenfekUserDTO, CreatePrincipalUserDTO, Upd
 @injectable()
 export class PrincipalService {
   constructor(
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(PrincipalRepository) private principalRepository: PrincipalRepository,
     @inject(WalletRepository) private walletRepository: WalletRepository,
     @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository,
@@ -156,6 +158,13 @@ export class PrincipalService {
   async getIncomeSummary(userId: number) {
     const wallet = await this.walletRepository.findByUserId(userId);
     const withdrawals = await this.withdrawalRepository.findByUserId(userId);
+    const unresolvedCredits = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, supplement, amount, costPrice, markupFactor, createdAt, status
+       FROM PrincipalCredit
+       WHERE principalId = ? AND status = 'unresolved'
+       ORDER BY createdAt DESC`,
+      userId
+    ).catch(() => []);
 
     const totals = withdrawals.reduce(
       (acc, w) => {
@@ -169,6 +178,17 @@ export class PrincipalService {
 
     return {
       walletBalance: wallet?.balance ?? 0,
+      unresolvedCredits: Array.isArray(unresolvedCredits)
+        ? unresolvedCredits.map((credit: any) => ({
+            id: Number(credit.id),
+            supplement: String(credit.supplement || ''),
+            amount: Number(credit.amount || 0),
+            costPrice: Number(credit.costPrice || 0),
+            markupFactor: Number(credit.markupFactor || 1.3),
+            date: credit.createdAt ? new Date(credit.createdAt).toLocaleDateString() : 'Recently',
+            status: String(credit.status || 'unresolved'),
+          }))
+        : [],
       withdrawals: {
         totalRequested: totals.totalRequested,
         totalCompleted: totals.totalCompleted,
@@ -176,5 +196,13 @@ export class PrincipalService {
         count: withdrawals.length,
       },
     };
+  }
+
+  async resolvePrincipalCredit(userId: number, creditId: number) {
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE PrincipalCredit SET status = 'resolved', updatedAt = NOW() WHERE id = ? AND principalId = ?`,
+      creditId,
+      userId
+    );
   }
 }

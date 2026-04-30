@@ -3,30 +3,42 @@ import { CreateBasicSchema } from './basic.dto';
 import { CreateLifestyleSchema } from './lifestyle.dto';
 import { CreatePreferenceSchema } from './preference.dto';
 
+const optionalTrimmedString = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().optional());
+
+const optionalUrlString = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().url('Invalid image URL').optional());
+
 const BaseProfileSchema = z.object({
   email: z.string().email('Invalid email format').transform(val => val.trim()),
   firstName: z.string().min(2, 'First name must be at least 2 characters').transform(val => val.trim()),
   lastName: z.string().min(2, 'Last name must be at least 2 characters').transform(val => val.trim()),
-  phone: z.string().min(1, 'Phone is required').optional(),
+  phone: optionalTrimmedString,
 });
 
 const PrincipalExtrasSchema = z.object({
-  profileImageUrl: z.string().url('Invalid image URL').optional(),
-  profession: z.string().optional(),
-  currentPlaceOfWork: z.string().optional(),
-  licenseNumber: z.string().optional(),
-  yearsOfExperience: z.string().optional(),
-  preferredPaymentMethod: z.string().optional(),
-  bankName: z.string().optional(),
-  accountNumber: z.string().optional(),
-  accountName: z.string().optional(),
+  profileImageUrl: optionalUrlString,
+  profession: optionalTrimmedString,
+  currentPlaceOfWork: optionalTrimmedString,
+  licenseNumber: optionalTrimmedString,
+  yearsOfExperience: optionalTrimmedString,
+  preferredPaymentMethod: optionalTrimmedString,
+  bankName: optionalTrimmedString,
+  accountNumber: optionalTrimmedString,
+  accountName: optionalTrimmedString,
 });
 
 const BenfekProfileExtrasSchema = z.object({
-  allergies: z.string().optional(),
-  scares: z.string().optional(),
-  familyCondition: z.string().optional(),
-  medications: z.string().optional(),
+  allergies: optionalTrimmedString,
+  scares: optionalTrimmedString,
+  familyCondition: optionalTrimmedString,
+  medications: optionalTrimmedString,
   hasCurrentCondition: z.boolean().optional(),
   basic: CreateBasicSchema.optional(),
   lifestyle: CreateLifestyleSchema.optional(),

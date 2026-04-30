@@ -15,6 +15,7 @@ import {
   PaystackPackCheckoutDTO,
   PaystackPackCheckoutSchema,
 } from '../DTOs/paystack.dto';
+import { computePrincipalCredit } from '../utilities/principal-credit.utility';
  
 @injectable()
 export class PaystackController extends BaseController {
@@ -27,6 +28,125 @@ export class PaystackController extends BaseController {
     @inject(SupplementRepository) private supplementRepository: SupplementRepository
   ) {
     super(container);
+  }
+
+  private async recordPrincipalCreditForPack(params: {
+    orderId: number;
+    paymentId: number;
+    paymentReference: string;
+    packId: string;
+    packName: string;
+    quizCode: string;
+  }) {
+    const quizCodeRecord = await this.prisma.quizCode.findUnique({
+      where: { code: params.quizCode },
+      select: { createdBy: true, benfekName: true },
+    });
+
+    if (!quizCodeRecord?.createdBy) {
+      return;
+    }
+
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: quizCodeRecord.createdBy },
+      select: { id: true, balance: true },
+    });
+
+    if (!wallet?.id) {
+      return;
+    }
+
+    const packRows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT rpi.id,
+              rpi.quantity,
+              rpi.selectedWholesalerName,
+              rpi.selectedWholesalerPrice,
+              rpi.dispatchedWithoutWholesaler,
+              rpi.effectiveMarkupFactor,
+              s.name AS supplementName,
+              s.price AS sellingPrice
+       FROM ResearcherPackItem rpi
+       INNER JOIN ResearcherPack rp ON rp.id = rpi.packId
+       INNER JOIN Supplement s ON s.id = rpi.supplementId
+       WHERE rp.packId = ? AND rp.quizCode = ?
+       ORDER BY rpi.id ASC`,
+      params.packId,
+      params.quizCode
+    );
+
+    if (!Array.isArray(packRows) || packRows.length === 0) {
+      return;
+    }
+
+    const supplementSummaries = packRows.map((row) => {
+      const qty = Number(row.quantity || 1);
+      const sellingPrice = Number(row.sellingPrice || 0);
+      const amount = sellingPrice * qty;
+      const hasSelectedWholesaler =
+        row.selectedWholesalerName && Number.isFinite(Number(row.selectedWholesalerPrice)) && Number(row.selectedWholesalerPrice) > 0;
+      const markupFactor = Number(row.effectiveMarkupFactor || 1.3) || 1.3;
+      const costPrice = hasSelectedWholesaler
+        ? Number(row.selectedWholesalerPrice || 0) * qty
+        : amount / markupFactor;
+      const credit = computePrincipalCredit(amount, costPrice);
+
+      return {
+        line: `${String(row.supplementName || 'Supplement')} x${qty}`,
+        amount,
+        costPrice,
+        markupFactor,
+        selectedWholesalerName: row.selectedWholesalerName || null,
+        dispatchedWithoutWholesaler: Boolean(row.dispatchedWithoutWholesaler),
+        ...credit,
+      };
+    });
+
+    const aggregate = supplementSummaries.reduce(
+      (acc, item) => {
+        acc.amount += item.amount;
+        acc.costPrice += item.costPrice;
+        acc.tax += item.tax;
+        acc.serviceCharge += item.serviceCharge;
+        acc.hlsCommission += item.hlsCommission;
+        acc.principalShare += item.principalShare;
+        return acc;
+      },
+      { amount: 0, costPrice: 0, tax: 0, serviceCharge: 0, hlsCommission: 0, principalShare: 0 }
+    );
+
+    await this.prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: aggregate.principalShare } },
+    });
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO PrincipalCredit
+      (principalId, walletId, quizCode, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unresolved', ?, NOW(), NOW())`,
+      quizCodeRecord.createdBy,
+      wallet.id,
+      params.quizCode,
+      params.packId,
+      params.packName,
+      quizCodeRecord.benfekName,
+      params.orderId,
+      params.paymentId,
+      params.paymentReference,
+      supplementSummaries.map((item) => item.line).join(', '),
+      aggregate.amount,
+      aggregate.costPrice,
+      1.3,
+      aggregate.tax,
+      aggregate.serviceCharge,
+      aggregate.hlsCommission,
+      aggregate.principalShare,
+      JSON.stringify({
+        packName: params.packName,
+        packId: params.packId,
+        benfekName: quizCodeRecord.benfekName,
+        items: supplementSummaries,
+      })
+    );
   }
 
   /**
@@ -282,27 +402,21 @@ export class PaystackController extends BaseController {
       const metadata = (result.data.metadata || {}) as Record<string, any>;
       const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
 
-      if (!orderId) {
-        return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
-      }
+      if (result.data.status === 'success') {
+        const metadata = result.data.metadata || {};
+        const rawOrderId = metadata.orderId;
+        const orderId =
+          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
+
+        if (!orderId) {
+          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
+        }
 
       if (result.data.status === 'success') {
         await this.orderRepository.updateStatus(orderId, 'paid');
 
-        const storedMetadata = this.parseStoredMetadata(existingPayment?.metadata);
-        const mergedMetadata = this.buildPaymentMetadata(
-          {
-            ...storedMetadata,
-            ...metadata,
-          },
-          {
-          verify: result.data,
-          paystackReference: reference,
-          paystackTransactionId: result.data.id ? String(result.data.id) : null,
-          }
-        );
-
-        await this.paystackRepository.upsertPaymentByOrderId({
+        // Create payment record
+        const payment = await this.paystackRepository.savePayment({
           userId,
           orderId,
           amount: result.data.amount / 100,
@@ -326,6 +440,27 @@ export class PaystackController extends BaseController {
           await this.cartService.clearCart(userId);
         }
 
+        // Pack checkout can succeed without the user having an active cart.
+        // Clearing the cart is best-effort and should not fail verification.
+        try {
+          await this.cartService.clearCart(userId);
+        } catch (cartError: any) {
+          if (cartError?.message !== 'Cart not found') {
+            throw cartError;
+          }
+        }
+
+        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
+          await this.recordPrincipalCreditForPack({
+            orderId,
+            paymentId: payment.id,
+            paymentReference: reference as string,
+            packId: String(metadata.packId),
+            packName: String(metadata.packName),
+            quizCode: String(metadata.quizCode),
+          });
+        }
+
         return res.status(200).json({
           status: true,
           message: 'Payment verified successfully',
@@ -344,7 +479,16 @@ export class PaystackController extends BaseController {
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           },
         });
-      }
+      } else {
+        // Payment failed
+        const metadata = result.data.metadata || {};
+        const rawOrderId = metadata.orderId;
+        const orderId =
+          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
+
+        if (orderId) {
+          await this.orderRepository.updateStatus(orderId, 'failed');
+        }
 
       await this.orderRepository.updateStatus(orderId, 'failed');
       const storedMetadata = this.parseStoredMetadata(existingPayment?.metadata);
