@@ -1,14 +1,35 @@
 import { z } from 'zod';
 
+const optionalMultiValueField = z
+  .union([z.array(z.string()), z.string(), z.undefined()])
+  .transform((value) => {
+    if (Array.isArray(value)) {
+      const normalized = value.map((item) => item.trim()).filter(Boolean);
+      return normalized.length ? normalized : undefined;
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      return trimmed
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    return undefined;
+  });
+
 export const CreateQuizCodeSchema = z.object({
   benfekName: z.string().min(1, 'Benfek name is required'),
   benfekPhone: z.string().min(1, 'Benfek phone is required'),
   benfekAge: z.string().min(1, 'Benfek age is required'),
   benfekGender: z.string().min(1, 'Benfek gender is required'),
-  allergies: z.string().optional(),
-  scares: z.string().optional(),
-  familyCondition: z.string().optional(),
-  medications: z.string().optional(),
+  allergies: optionalMultiValueField,
+  scares: optionalMultiValueField,
+  familyCondition: optionalMultiValueField,
+  medications: optionalMultiValueField,
+  currentConditions: optionalMultiValueField,
   hasCurrentCondition: z.boolean().optional(),
 });
 

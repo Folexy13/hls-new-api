@@ -38,6 +38,11 @@ export const DispatchPackSchema = z.object({
     z.object({
       id: z.coerce.number().int().positive('Supplement ID must be valid'),
       quantity: z.coerce.number().int().positive('Quantity must be at least 1').default(1),
+      selectedWholesalerName: z.string().optional().nullable(),
+      selectedWholesalerPrice: z.coerce.number().nonnegative().optional().nullable(),
+      selectedWholesalerContact: z.string().optional().nullable(),
+      selectedWholesalerAddress: z.string().optional().nullable(),
+      forceDispatchWithoutWholesaler: z.boolean().optional().default(false),
     })
   ).min(1, 'Select at least one supplement').optional(),
   status: z.string().optional().default('dispatched'),

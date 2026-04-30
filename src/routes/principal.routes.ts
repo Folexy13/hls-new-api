@@ -13,6 +13,7 @@ export const createPrincipalRoutes = (container: Container): Router => {
   router.get('/me', authGuard.verify(), authenticatedHandler(principalController.getMe.bind(principalController)));
   router.put('/me', authGuard.verify(), authenticatedHandler(principalController.updateMe.bind(principalController)));
   router.get('/me/income-summary', authGuard.verify(), authenticatedHandler(principalController.getIncomeSummary.bind(principalController)));
+  router.post('/me/credits/:id/resolve', authGuard.verify(), authenticatedHandler(principalController.resolveCredit.bind(principalController)));
   router.post('/benfeks', authGuard.verify(), authenticatedHandler(principalController.createBenfek.bind(principalController)));
   router.get('/me/benfeks', authGuard.verify(), authenticatedHandler(principalController.getMyBenfeks.bind(principalController)));
   router.get('/', authGuard.verify(), authenticatedHandler(principalController.getPrincipals.bind(principalController)));

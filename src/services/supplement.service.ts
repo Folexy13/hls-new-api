@@ -11,6 +11,12 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     if (value === null) return Prisma.DbNull;
     return value as Prisma.InputJsonValue;
   }
+
+  private toNullableDate(value?: string | null) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    return new Date(value);
+  }
   
   async findAll(page: number = 1, limit: number = 10, userId?: number): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
@@ -41,6 +47,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       category: data.category ?? null,
       manufacturer: data.manufacturer ?? null,
       strength: data.strength ?? null,
+      expiryDate: this.toNullableDate(data.expiryDate),
       dosageForm: data.dosageForm ?? null,
       budgetRange: data.budgetRange ?? null,
       tags: this.toNullableJson(data.tags),
@@ -70,6 +77,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       category: data.category,
       manufacturer: data.manufacturer,
       strength: data.strength,
+      expiryDate: this.toNullableDate(data.expiryDate),
       dosageForm: data.dosageForm,
       budgetRange: data.budgetRange,
       tags: this.toNullableJson(data.tags),

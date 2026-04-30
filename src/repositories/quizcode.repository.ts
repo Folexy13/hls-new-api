@@ -1,4 +1,5 @@
 import { PrismaClient, QuizCode } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { injectable, inject } from 'inversify';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -8,10 +9,11 @@ export interface CreateQuizCodeDTO {
   benfekPhone: string;
   benfekAge: string;
   benfekGender: string;
-  allergies?: string;
-  scares?: string;
-  familyCondition?: string;
-  medications?: string;
+  allergies?: string[];
+  scares?: string[];
+  familyCondition?: string[];
+  medications?: string[];
+  currentConditions?: string[];
   hasCurrentCondition?: boolean;
   expiresAt?: Date;
 }
@@ -58,13 +60,14 @@ export class QuizCodeRepository {
         benfekPhone: data.benfekPhone,
         benfekAge: data.benfekAge,
         benfekGender: data.benfekGender,
-        allergies: data.allergies,
-        scares: data.scares,
-        familyCondition: data.familyCondition,
-        medications: data.medications,
+        allergies: (data.allergies as unknown as Prisma.InputJsonValue | undefined),
+        scares: (data.scares as unknown as Prisma.InputJsonValue | undefined),
+        familyCondition: (data.familyCondition as unknown as Prisma.InputJsonValue | undefined),
+        medications: (data.medications as unknown as Prisma.InputJsonValue | undefined),
+        currentConditions: (data.currentConditions as unknown as Prisma.InputJsonValue | undefined),
         hasCurrentCondition: data.hasCurrentCondition || false,
         expiresAt: data.expiresAt,
-      },
+      } as any,
     });
   }
 

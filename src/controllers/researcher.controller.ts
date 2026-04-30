@@ -12,6 +12,7 @@ import {
   UpdateResearcherSupplementSchema,
   VerifyBenfekCodeSchema,
 } from '../DTOs/researcher.dto';
+import { formatHealthField } from '../utilities/health-field.utility';
 
 @injectable()
 export class ResearcherController {
@@ -93,11 +94,12 @@ export class ResearcherController {
           registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
           usedAt: quizCode.usedAt,
           health: {
-            allergies: quizCode.allergies,
-            scares: quizCode.scares,
-            familyCondition: quizCode.familyCondition,
-            medications: quizCode.medications,
+            allergies: formatHealthField(quizCode.allergies),
+            scares: formatHealthField(quizCode.scares),
+            familyCondition: formatHealthField(quizCode.familyCondition),
+            medications: formatHealthField(quizCode.medications),
             hasCurrentCondition: quizCode.hasCurrentCondition,
+            currentConditions: (quizCode as any).currentConditions ?? undefined,
           },
           quiz: {
             basics: {
@@ -325,8 +327,44 @@ export class ResearcherController {
                 supplementId: item.id,
               },
             },
-            create: { packId: pack.id, supplementId: item.id, quantity: item.quantity },
-            update: { quantity: item.quantity },
+            create: {
+              packId: pack.id,
+              supplementId: item.id,
+              quantity: item.quantity,
+              selectedWholesalerName: item.selectedWholesalerName || null,
+              selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
+              selectedWholesalerContact: item.selectedWholesalerContact || null,
+              selectedWholesalerAddress: item.selectedWholesalerAddress || null,
+              selectedWholesalerDetails: item.selectedWholesalerName
+                ? {
+                    name: item.selectedWholesalerName,
+                    price: item.selectedWholesalerPrice ?? null,
+                    contact: item.selectedWholesalerContact || null,
+                    address: item.selectedWholesalerAddress || null,
+                  }
+                : null,
+              requiresReselection: !item.selectedWholesalerName,
+              dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
+              effectiveMarkupFactor: 1.3,
+            } as any,
+            update: {
+              quantity: item.quantity,
+              selectedWholesalerName: item.selectedWholesalerName || null,
+              selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
+              selectedWholesalerContact: item.selectedWholesalerContact || null,
+              selectedWholesalerAddress: item.selectedWholesalerAddress || null,
+              selectedWholesalerDetails: item.selectedWholesalerName
+                ? {
+                    name: item.selectedWholesalerName,
+                    price: item.selectedWholesalerPrice ?? null,
+                    contact: item.selectedWholesalerContact || null,
+                    address: item.selectedWholesalerAddress || null,
+                  }
+                : null,
+              requiresReselection: !item.selectedWholesalerName,
+              dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
+              effectiveMarkupFactor: 1.3,
+            } as any,
           })
         )
       );
@@ -338,36 +376,30 @@ export class ResearcherController {
 
       if (result && data.status === 'dispatched') {
         const checkers = await (this.prisma.user.findMany({
-          where: { role: 'researcher' }, // Notify all researchers for this experiment
-          select: { id: true },
+          where: { role: 'researcher', researcherType: 'checker' as any },
+          select: { id: true, email: true, firstName: true, lastName: true },
         }) as any);
 
         if (Array.isArray(checkers) && checkers.length) {
           const items = (result.items || []) as any[];
+          const payloadItemsById = new Map<number, any>(
+            itemData.map((item: any) => [Number(item.id), item] as [number, any])
+          );
           const sellingTotal = items.reduce((sum, item) => {
             const price = Number(item?.supplement?.price || 0);
             const qty = Number(item?.quantity || 1);
             return sum + price * qty;
           }, 0);
 
-          const wholesaleForItem = (supplement: any) => {
-            const wholesalers = supplement?.wholesalers;
-            if (!Array.isArray(wholesalers) || wholesalers.length === 0) return { name: null, price: 0, options: [] };
-            const options = wholesalers
-              .map((w: any) => ({
-                name: String(w?.name || '').trim(),
-                price: Number(w?.price || 0),
-              }))
-              .filter((w: any) => w.name && Number.isFinite(w.price) && w.price > 0);
-            if (!options.length) return { name: null, price: 0, options: [] };
-            const best = options.reduce((min: any, cur: any) => (cur.price < min.price ? cur : min), options[0]);
-            return { name: best.name, price: best.price, options };
-          };
-
           const wholesaleTotal = items.reduce((sum, item) => {
             const qty = Number(item?.quantity || 1);
-            const best = wholesaleForItem(item?.supplement);
-            return sum + best.price * qty;
+            const source = payloadItemsById.get(Number(item.supplementId));
+            const price = Number(source?.selectedWholesalerPrice || 0);
+            if (price > 0) {
+              return sum + price * qty;
+            }
+
+            return sum + Number(item?.supplement?.price || 0) * qty / 1.3;
           }, 0);
 
           const principalName = `${quizCode.creator.firstName} ${quizCode.creator.lastName}`.trim();
@@ -377,10 +409,16 @@ export class ResearcherController {
             const name = String(item?.supplement?.name || 'Unknown');
             const sell = Number(item?.supplement?.price || 0);
             const qty = Number(item?.quantity || 1);
-            const best = wholesaleForItem(item?.supplement);
-            const margin = sell - best.price;
-            const bestLabel = best.name ? `${best.name} NGN ${best.price.toLocaleString()}` : 'N/A';
-            return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | wholesale ${bestLabel} | margin NGN ${margin.toLocaleString()}`;
+            const source = payloadItemsById.get(Number(item.supplementId));
+            const sourcePrice =
+              Number(source?.selectedWholesalerPrice || 0) > 0
+                ? Number(source?.selectedWholesalerPrice || 0)
+                : sell / 1.3;
+            const margin = sell - sourcePrice;
+            const sourceLabel = source?.selectedWholesalerName
+              ? `${source.selectedWholesalerName} NGN ${sourcePrice.toLocaleString()}`
+              : `Fallback markup 1.3 (cost NGN ${Math.round(sourcePrice).toLocaleString()})`;
+            return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | source ${sourceLabel} | margin NGN ${Math.round(margin).toLocaleString()}`;
           });
 
           const subject = `Pack dispatched: ${result.packName} (${data.code})`;
@@ -403,6 +441,19 @@ export class ResearcherController {
               isRead: false,
             })),
           });
+
+          await Promise.all(
+            checkers
+              .filter((checker: any) => checker.email)
+              .map((checker: any) =>
+                this.notificationService.sendEmail(
+                  checker.email,
+                  subject,
+                  `<pre>${[baseMessage, '', 'Item sourcing', ...lines].join('\n')}</pre>`,
+                  [baseMessage, '', 'Item sourcing', ...lines].join('\n')
+                ).catch(() => undefined)
+              )
+          );
         }
 
         await this.notificationService.sendPackAvailableMessage({

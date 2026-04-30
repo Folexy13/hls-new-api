@@ -9,6 +9,10 @@ export const CreateSupplementSchema = z.object({
   category: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   strength: z.string().optional().nullable(),
+  expiryDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expiry date must be in YYYY-MM-DD format'), z.literal('')])
+    .optional()
+    .nullable(),
   dosageForm: z.string().optional().nullable(),
   budgetRange: z.string().optional().nullable(),
   tags: z.record(z.array(z.string())).optional(),

@@ -22,10 +22,14 @@ app.use(
       "https://www.hlsnigeria.com",
       "https://hlsnigeria.com",
       "http://localhost:3000",
+      "https://localhost:3000",
       "http://localhost:3001",
+      "https://localhost:3001",
       "https://hls-testing.netlify.app",
       "http://localhost:3002",
-      "http://localhost:7000"
+      "https://localhost:3002",
+      "http://localhost:7000",
+      "https://localhost:7000"
     ], // or an array of allowed origins
 
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
