@@ -403,20 +403,13 @@ export class PaystackController extends BaseController {
       const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
 
       if (result.data.status === 'success') {
-        const metadata = result.data.metadata || {};
-        const rawOrderId = metadata.orderId;
-        const orderId =
-          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
-
         if (!orderId) {
           return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
         }
 
-      if (result.data.status === 'success') {
         await this.orderRepository.updateStatus(orderId, 'paid');
 
-        // Create payment record
-        const payment = await this.paystackRepository.savePayment({
+        const payment = await this.paystackRepository.upsertPaymentByOrderId({
           userId,
           orderId,
           amount: result.data.amount / 100,
@@ -427,7 +420,12 @@ export class PaystackController extends BaseController {
           paystackChannel: result.data.channel,
           currency: result.data.currency,
           paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
-          metadata: mergedMetadata,
+          metadata: JSON.stringify({
+            ...metadata,
+            verify: result.data,
+            paystackReference: reference,
+            paystackTransactionId: result.data.id ? String(result.data.id) : null,
+          }),
         });
 
         if (metadata.checkoutType !== 'pack') {
@@ -437,37 +435,13 @@ export class PaystackController extends BaseController {
               await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
             }
           }
-          await this.cartService.clearCart(userId);
-        }
 
-        // Pack checkout can succeed without the user having an active cart.
-        // Clearing the cart is best-effort and should not fail verification.
-        try {
-          await this.cartService.clearCart(userId);
-        } catch (cartError: any) {
-          if (cartError?.message !== 'Cart not found') {
-            throw cartError;
-          }
-        }
-
-        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
-          await this.recordPrincipalCreditForPack({
-            orderId,
-            paymentId: payment.id,
-            paymentReference: reference as string,
-            packId: String(metadata.packId),
-            packName: String(metadata.packName),
-            quizCode: String(metadata.quizCode),
-          });
-        }
-
-        // Pack checkout can succeed without the user having an active cart.
-        // Clearing the cart is best-effort and should not fail verification.
-        try {
-          await this.cartService.clearCart(userId);
-        } catch (cartError: any) {
-          if (cartError?.message !== 'Cart not found') {
-            throw cartError;
+          try {
+            await this.cartService.clearCart(userId);
+          } catch (cartError: any) {
+            if (cartError?.message !== 'Cart not found') {
+              throw cartError;
+            }
           }
         }
 
@@ -485,66 +459,63 @@ export class PaystackController extends BaseController {
         return res.status(200).json({
           status: true,
           message: 'Payment verified successfully',
-          data: {
-            orderId,
-            orderNumber: metadata.orderNumber,
-            packId: metadata.packId,
-            packName: metadata.packName,
-            amount: result.data.amount / 100,
-            status: 'success',
-            channel: result.data.channel,
-            checkoutType: metadata.checkoutType || 'cart',
-            packId: metadata.packId || null,
+            data: {
+              orderId,
+              orderNumber: metadata.orderNumber,
+              amount: result.data.amount / 100,
+              status: 'success',
+              channel: result.data.channel,
+              checkoutType: metadata.checkoutType || 'cart',
+              packId: metadata.packId || null,
             packName: metadata.packName || null,
             paystackReference: reference,
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           },
         });
       } else {
-        // Payment failed
-        const metadata = result.data.metadata || {};
-        const rawOrderId = metadata.orderId;
-        const orderId =
-          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
-
-        if (orderId) {
-          await this.orderRepository.updateStatus(orderId, 'failed');
+        if (!orderId) {
+          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
         }
 
-      await this.orderRepository.updateStatus(orderId, 'failed');
-      const storedMetadata = this.parseStoredMetadata(existingPayment?.metadata);
-      await this.paystackRepository.upsertPaymentByOrderId({
-        userId,
-        orderId,
-        amount: result.data.amount ? result.data.amount / 100 : 0,
-        method: 'paystack',
-        status: 'failed',
-        paystackReference: reference as string,
-        paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-        paystackChannel: result.data.channel,
-        currency: result.data.currency || 'NGN',
-        metadata: this.buildPaymentMetadata(
-          {
+        await this.orderRepository.updateStatus(orderId, 'failed');
+        let storedMetadata: Record<string, any> = {};
+        if (existingPayment?.metadata) {
+          try {
+            storedMetadata = JSON.parse(existingPayment.metadata);
+          } catch {
+            storedMetadata = {};
+          }
+        }
+
+        await this.paystackRepository.upsertPaymentByOrderId({
+          userId,
+          orderId,
+          amount: result.data.amount ? result.data.amount / 100 : 0,
+          method: 'paystack',
+          status: 'failed',
+          paystackReference: reference as string,
+          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
+          paystackChannel: result.data.channel,
+          currency: result.data.currency || 'NGN',
+          metadata: JSON.stringify({
             ...storedMetadata,
             ...metadata,
-          },
-          {
             verify: result.data,
             paystackReference: reference,
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
-          }
-        ),
-      });
+          }),
+        });
 
-      return res.status(400).json({
-        status: false,
-        message: 'Payment verification failed',
-        data: {
-          status: result.data.status,
-          gateway_response: result.data.gateway_response,
-          checkoutType: metadata.checkoutType || 'cart',
-        },
-      });
+        return res.status(400).json({
+          status: false,
+          message: 'Payment verification failed',
+          data: {
+            status: result.data.status,
+            gateway_response: result.data.gateway_response,
+            checkoutType: metadata.checkoutType || 'cart',
+          },
+        });
+      }
     } catch (error: any) {
       console.error('Verification error:', error);
       return res.status(500).json({ message: error?.response?.data?.message || 'Paystack verification failed.' });
