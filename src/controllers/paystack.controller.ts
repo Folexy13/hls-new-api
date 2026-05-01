@@ -439,9 +439,15 @@ export class PaystackController extends BaseController {
         paystackTransactionId: result.data.id ? String(result.data.id) : null,
       });
 
-      if (!orderId) {
-        return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
-      }
+      if (result.data.status === 'success') {
+        const metadata = result.data.metadata || {};
+        const rawOrderId = metadata.orderId;
+        const orderId =
+          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
+
+        if (!orderId) {
+          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
+        }
 
       if (result.data.status === 'success') {
         await this.orderRepository.updateStatus(orderId, 'paid');
@@ -502,6 +508,27 @@ export class PaystackController extends BaseController {
           });
         }
 
+        // Pack checkout can succeed without the user having an active cart.
+        // Clearing the cart is best-effort and should not fail verification.
+        try {
+          await this.cartService.clearCart(userId);
+        } catch (cartError: any) {
+          if (cartError?.message !== 'Cart not found') {
+            throw cartError;
+          }
+        }
+
+        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
+          await this.recordPrincipalCreditForPack({
+            orderId,
+            paymentId: payment.id,
+            paymentReference: reference as string,
+            packId: String(metadata.packId),
+            packName: String(metadata.packName),
+            quizCode: String(metadata.quizCode),
+          });
+        }
+
         return res.status(200).json({
           status: true,
           message: 'Payment verified successfully',
@@ -518,7 +545,16 @@ export class PaystackController extends BaseController {
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           },
         });
-      }
+      } else {
+        // Payment failed
+        const metadata = result.data.metadata || {};
+        const rawOrderId = metadata.orderId;
+        const orderId =
+          typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
+
+        if (orderId) {
+          await this.orderRepository.updateStatus(orderId, 'failed');
+        }
 
       await this.orderRepository.updateStatus(orderId, 'failed');
       const storedMetadata = this.parseStoredMetadata(existingPayment?.metadata);
