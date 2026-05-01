@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "db:seed": "npx prisma db seed"
+    "db:seed": "npx prisma db seed",
+    "db:backfill:principal-wallets": "node scripts/backfill-principal-wallets.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

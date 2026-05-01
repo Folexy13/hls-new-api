@@ -22,6 +22,7 @@ const optionalMultiValueField = z
 
 export const CreateQuizCodeSchema = z.object({
   benfekName: z.string().min(1, 'Benfek name is required'),
+  benfekEmail: z.string().email('Invalid benfek email format').optional(),
   benfekPhone: z.string().min(1, 'Benfek phone is required'),
   benfekAge: z.string().min(1, 'Benfek age is required'),
   benfekGender: z.string().min(1, 'Benfek gender is required'),

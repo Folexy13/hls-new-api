@@ -28,6 +28,14 @@ export default class AuthRepositoryImpl implements AuthRepository {
           data.role === "researcher"
             ? (data.researcherType ?? "maker")
             : null,
+        wallet:
+          data.role === "principal"
+            ? {
+                create: {
+                  balance: 0,
+                },
+              }
+            : undefined,
       } as any
     });
   }
