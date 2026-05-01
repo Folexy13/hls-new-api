@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from '../types/auth.types';
 import { CreateSupplementSchema, UpdateSupplementSchema } from '../DTOs/supplement.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 import { cloudinaryService } from '../utilities/cloudinary.utility';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * @swagger
@@ -113,10 +114,12 @@ import { cloudinaryService } from '../utilities/cloudinary.utility';
 @injectable()
 export class SupplementController extends BaseController {
   private supplementService: SupplementService;
+  private prisma: PrismaClient;
 
   constructor(container: Container) {
     super(container);
     this.supplementService = container.get(SupplementService);
+    this.prisma = container.get<PrismaClient>('PrismaClient');
   }
 
   private ensurePrincipalRole(req: AuthenticatedRequest, res: Response): boolean {
@@ -175,15 +178,29 @@ export class SupplementController extends BaseController {
       const { page = 1, limit = 10 } = req.query;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
-      
-      // Filter by userId if principal
+
       const role = String(req.user.role).toLowerCase();
       const isPrincipal = role === 'principal';
-      const filterUserId = isPrincipal ? req.user.id : undefined;
-      
-      console.log('Supplement list filter debug:', { role, isPrincipal, userId: req.user.id, filterUserId });
-      
-      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, filterUserId);
+      const isBenfek = role === 'benfek';
+      let where: any = undefined;
+
+      if (isPrincipal) {
+        where = { userId: req.user.id };
+      } else if (isBenfek) {
+        const quizCode = await this.prisma.quizCode.findFirst({
+          where: {
+            usedBy: req.user.id,
+            isUsed: true,
+          },
+          select: { createdBy: true },
+        });
+
+        const visibilityOr: any[] = [{ user: { is: { role: 'researcher' } } }];
+        if (quizCode?.createdBy) visibilityOr.push({ userId: quizCode.createdBy });
+        where = { OR: visibilityOr };
+      }
+
+      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, where);
       
       return ResponseUtil.success(res, { 
         supplements,
