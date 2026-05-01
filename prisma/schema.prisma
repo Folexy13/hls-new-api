@@ -397,9 +397,8 @@ model QuizCode {
   creator           User      @relation("QuizCodeCreator", fields: [createdBy], references: [id])
   
   // Benfek data filled by Principal
-    benfekName        String
-    benfekEmail       String?
-    benfekPhone       String
+  benfekName        String
+  benfekPhone       String
   benfekAge         String
   benfekGender      String
   basicNickname     String?  @db.Text

@@ -30,40 +30,6 @@ export class PaystackController extends BaseController {
     super(container);
   }
 
-  private parseStoredMetadata(metadata?: string | null): Record<string, any> {
-    if (!metadata) return {};
-
-    try {
-      const parsed = JSON.parse(metadata);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
-    }
-  }
-
-  private buildPaymentMetadata(
-    metadata: Record<string, any>,
-    paystackData: {
-      verify?: Record<string, any>;
-      paystackReference?: string | null;
-      paystackTransactionId?: string | null;
-    } = {}
-  ): string {
-    return JSON.stringify({
-      ...metadata,
-      paystackReference: paystackData.paystackReference ?? metadata.paystackReference ?? null,
-      paystackTransactionId:
-        paystackData.paystackTransactionId ?? metadata.paystackTransactionId ?? null,
-      verify: paystackData.verify ?? metadata.verify ?? null,
-    });
-  }
-
-  private normalizeString(value: unknown): string | undefined {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : undefined;
-    return undefined;
-  }
-
   private async recordPrincipalCreditForPack(params: {
     orderId: number;
     paymentId: number;
@@ -148,6 +114,11 @@ export class PaystackController extends BaseController {
       { amount: 0, costPrice: 0, tax: 0, serviceCharge: 0, hlsCommission: 0, principalShare: 0 }
     );
 
+    await this.prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: aggregate.principalShare } },
+    });
+
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO PrincipalCredit
       (principalId, walletId, quizCode, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
@@ -161,7 +132,7 @@ export class PaystackController extends BaseController {
       params.orderId,
       params.paymentId,
       params.paymentReference,
-      params.packName,
+      supplementSummaries.map((item) => item.line).join(', '),
       aggregate.amount,
       aggregate.costPrice,
       1.3,
@@ -417,9 +388,8 @@ export class PaystackController extends BaseController {
       if (!reference) {
         return res.status(400).json({ message: 'Reference is required.' });
       }
-      const referenceValue = Array.isArray(reference) ? reference[0] : reference;
 
-      const existingPayment = await this.paystackRepository.getPaymentByTransaction(referenceValue);
+      const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference as string);
       if (existingPayment && existingPayment.status !== 'pending') {
         return res.status(200).json({
           message: 'Payment already processed.',
@@ -427,17 +397,10 @@ export class PaystackController extends BaseController {
         });
       }
 
-      const result = await PaystackService.verifyTransaction(referenceValue);
+      const result = await PaystackService.verifyTransaction(reference as string);
       const userId = req.user.id;
       const metadata = (result.data.metadata || {}) as Record<string, any>;
-      const rawOrderId = metadata.orderId ?? existingPayment?.orderId;
-      const orderId =
-        typeof rawOrderId === 'number' ? rawOrderId : Number.parseInt(String(rawOrderId), 10);
-      const mergedMetadata = this.buildPaymentMetadata(metadata, {
-        verify: result.data,
-        paystackReference: referenceValue,
-        paystackTransactionId: result.data.id ? String(result.data.id) : null,
-      });
+      const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
 
       if (result.data.status === 'success') {
         const metadata = result.data.metadata || {};
@@ -452,33 +415,20 @@ export class PaystackController extends BaseController {
       if (result.data.status === 'success') {
         await this.orderRepository.updateStatus(orderId, 'paid');
 
-        const payment = existingPayment
-          ? await this.paystackRepository.upsertPaymentByOrderId({
-              userId,
-              orderId,
-              amount: result.data.amount / 100,
-              method: 'paystack',
-              status: 'success',
-              paystackReference: referenceValue,
-              paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-              paystackChannel: this.normalizeString(result.data.channel),
-              currency: this.normalizeString(result.data.currency),
-              paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
-              metadata: mergedMetadata,
-            })
-          : await this.paystackRepository.savePayment({
-              userId,
-              orderId,
-              amount: result.data.amount / 100,
-              method: 'paystack',
-              status: 'success',
-              paystackReference: referenceValue,
-              paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-              paystackChannel: this.normalizeString(result.data.channel),
-              currency: this.normalizeString(result.data.currency),
-              paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
-              metadata: mergedMetadata,
-            });
+        // Create payment record
+        const payment = await this.paystackRepository.savePayment({
+          userId,
+          orderId,
+          amount: result.data.amount / 100,
+          method: 'paystack',
+          status: 'success',
+          paystackReference: reference as string,
+          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
+          paystackChannel: result.data.channel,
+          currency: result.data.currency,
+          paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
+          metadata: mergedMetadata,
+        });
 
         if (metadata.checkoutType !== 'pack') {
           const order = await this.orderRepository.findById(orderId);
@@ -487,8 +437,11 @@ export class PaystackController extends BaseController {
               await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
             }
           }
+          await this.cartService.clearCart(userId);
         }
 
+        // Pack checkout can succeed without the user having an active cart.
+        // Clearing the cart is best-effort and should not fail verification.
         try {
           await this.cartService.clearCart(userId);
         } catch (cartError: any) {
@@ -501,7 +454,7 @@ export class PaystackController extends BaseController {
           await this.recordPrincipalCreditForPack({
             orderId,
             paymentId: payment.id,
-            paymentReference: referenceValue,
+            paymentReference: reference as string,
             packId: String(metadata.packId),
             packName: String(metadata.packName),
             quizCode: String(metadata.quizCode),
@@ -541,7 +494,9 @@ export class PaystackController extends BaseController {
             status: 'success',
             channel: result.data.channel,
             checkoutType: metadata.checkoutType || 'cart',
-            paystackReference: referenceValue,
+            packId: metadata.packId || null,
+            packName: metadata.packName || null,
+            paystackReference: reference,
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           },
         });
@@ -564,10 +519,10 @@ export class PaystackController extends BaseController {
         amount: result.data.amount ? result.data.amount / 100 : 0,
         method: 'paystack',
         status: 'failed',
-        paystackReference: referenceValue,
+        paystackReference: reference as string,
         paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-        paystackChannel: this.normalizeString(result.data.channel),
-        currency: this.normalizeString(result.data.currency) || 'NGN',
+        paystackChannel: result.data.channel,
+        currency: result.data.currency || 'NGN',
         metadata: this.buildPaymentMetadata(
           {
             ...storedMetadata,
@@ -575,7 +530,7 @@ export class PaystackController extends BaseController {
           },
           {
             verify: result.data,
-            paystackReference: referenceValue,
+            paystackReference: reference,
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           }
         ),
