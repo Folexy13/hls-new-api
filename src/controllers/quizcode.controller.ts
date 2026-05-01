@@ -75,7 +75,6 @@ export class QuizCodeController extends BaseController {
       const quizCode = await this.quizCodeRepository.create({
         createdBy: user.id,
         benfekName: data.benfekName,
-        benfekEmail: data.benfekEmail,
         benfekPhone: data.benfekPhone,
         benfekAge: data.benfekAge,
         benfekGender: data.benfekGender,
@@ -143,7 +142,6 @@ export class QuizCodeController extends BaseController {
       const quizCodeData = result.quizCode ? {
         code: result.quizCode.code,
         benfekName: result.quizCode.benfekName,
-        benfekEmail: (result.quizCode as any).benfekEmail,
         benfekPhone: result.quizCode.benfekPhone,
         createdBy: {
           firstName: result.quizCode.creator.firstName,
@@ -198,7 +196,6 @@ export class QuizCodeController extends BaseController {
       const data = {
         code: quizCode.code,
         benfekName: quizCode.benfekName,
-        benfekEmail: (quizCode as any).benfekEmail,
         benfekPhone: quizCode.benfekPhone,
         registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
         usedAt: quizCode.usedAt
@@ -251,7 +248,6 @@ export class QuizCodeController extends BaseController {
       const payload = {
         code: quizCode.code,
         benfekName: quizCode.benfekName,
-        benfekEmail: (quizCode as any).benfekEmail,
         benfekPhone: quizCode.benfekPhone,
         benfekAge: (quizCode as any).benfekAge,
         benfekGender: (quizCode as any).benfekGender,

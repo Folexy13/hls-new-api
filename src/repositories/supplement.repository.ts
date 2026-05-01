@@ -21,8 +21,10 @@ export class SupplementRepository {
   async findAll(
     skip?: number,
     take?: number,
-    where?: Prisma.SupplementWhereInput,
+    userId?: number,
   ): Promise<{ items: SupplementWithUser[]; total: number }> {
+    const where = userId ? { userId } : {};
+    
     const [supplements, total] = await Promise.all([
       this.prisma.supplement.findMany({
         where,

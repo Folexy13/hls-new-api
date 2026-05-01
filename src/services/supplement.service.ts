@@ -18,13 +18,9 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return new Date(value);
   }
   
-  async findAll(
-    page: number = 1,
-    limit: number = 10,
-    where?: Prisma.SupplementWhereInput
-  ): Promise<{ supplements: Supplement[]; total: number }> {
+  async findAll(page: number = 1, limit: number = 10, userId?: number): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
-    const result = await this.supplementRepository.findAll(skip, limit, where);
+    const result = await this.supplementRepository.findAll(skip, limit, userId);
     return { supplements: result.items, total: result.total };
   }
 

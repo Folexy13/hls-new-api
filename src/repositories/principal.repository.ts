@@ -43,11 +43,6 @@ export class PrincipalRepository {
         accountNumber: data.accountNumber,
         accountName: data.accountName,
         role: 'principal',
-        wallet: {
-          create: {
-            balance: 0,
-          },
-        },
       },
     });
   }

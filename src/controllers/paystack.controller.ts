@@ -114,6 +114,11 @@ export class PaystackController extends BaseController {
       { amount: 0, costPrice: 0, tax: 0, serviceCharge: 0, hlsCommission: 0, principalShare: 0 }
     );
 
+    await this.prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: aggregate.principalShare } },
+    });
+
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO PrincipalCredit
       (principalId, walletId, quizCode, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
@@ -127,7 +132,7 @@ export class PaystackController extends BaseController {
       params.orderId,
       params.paymentId,
       params.paymentReference,
-      params.packName,
+      supplementSummaries.map((item) => item.line).join(', '),
       aggregate.amount,
       aggregate.costPrice,
       1.3,
