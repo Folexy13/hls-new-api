@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export interface CreateQuizCodeDTO {
   createdBy: number;
   benfekName: string;
+  benfekEmail: string;
   benfekPhone: string;
   benfekAge: string;
   benfekGender: string;
@@ -57,6 +58,7 @@ export class QuizCodeRepository {
         code,
         createdBy: data.createdBy,
         benfekName: data.benfekName,
+        benfekEmail: data.benfekEmail,
         benfekPhone: data.benfekPhone,
         benfekAge: data.benfekAge,
         benfekGender: data.benfekGender,

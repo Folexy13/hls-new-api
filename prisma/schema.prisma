@@ -71,7 +71,6 @@ model User {
   principalCredits PrincipalCredit[]
   nutrient      NutrientType?  // One-to-one relation, no fields/references here
   gamePoints    BenfekGamePoint?
-  supportTickets SupportTicket[]
   quizCodesCreated QuizCode[]  @relation("QuizCodeCreator") // Quiz codes created by this principal
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -398,6 +397,7 @@ model QuizCode {
   
   // Benfek data filled by Principal
   benfekName        String
+  benfekEmail       String?
   benfekPhone       String
   benfekAge         String
   benfekGender      String
@@ -418,17 +418,5 @@ model QuizCode {
   
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-}
-
-model SupportTicket {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category  String
-  subject   String
-  message   String   @db.Text
-  status    String   @default("open")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
