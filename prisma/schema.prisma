@@ -406,6 +406,7 @@ model QuizCode {
   basicHeight       String?  @db.Text
   lifestyleHabits   String?  @db.Text
   lifestyleFun      String?  @db.Text
+  lifestyleDesires  String?  @db.Text
   lifestylePriority String?  @db.Text
   preferenceDrugForm String? @db.Text
   preferenceBudget  Float?

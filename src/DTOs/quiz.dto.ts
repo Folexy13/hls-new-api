@@ -26,6 +26,8 @@ export const CreateQuizCodeSchema = z.object({
   benfekPhone: z.string().min(1, 'Benfek phone is required'),
   benfekAge: z.string().min(1, 'Benfek age is required'),
   benfekGender: z.string().min(1, 'Benfek gender is required'),
+  benfekWeight: z.string().min(1, 'Benfek weight is required'),
+  benfekHeight: z.string().min(1, 'Benfek height is required'),
   allergies: optionalMultiValueField,
   scares: optionalMultiValueField,
   familyCondition: optionalMultiValueField,
@@ -46,12 +48,13 @@ export const CompleteBenfekQuizSchema = z.object({
   code: z.string().min(1, 'Quiz code is required'),
   basics: z.object({
     nickname: z.string().optional(),
-    weight: z.string().min(1, 'Weight is required'),
-    height: z.string().min(1, 'Height is required'),
+    weight: z.string().optional(),
+    height: z.string().optional(),
   }),
   lifestyle: z.object({
     habits: z.string().min(1, 'Habits is required'),
     funActivities: z.string().min(1, 'Fun activities is required'),
+    desires: z.string().min(1, 'Desires is required'),
     priority: z.string().min(1, 'Priority is required'),
   }),
   preferences: z.object({

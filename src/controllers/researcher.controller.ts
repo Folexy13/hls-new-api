@@ -110,6 +110,7 @@ export class ResearcherController {
             lifestyle: {
               habits: quizCode.lifestyleHabits,
               funActivities: quizCode.lifestyleFun,
+              desires: quizCode.lifestyleDesires,
               priority: quizCode.lifestylePriority,
             },
             preferences: {

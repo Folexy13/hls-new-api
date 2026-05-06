@@ -55,6 +55,7 @@ export class BenfekController {
         basicHeight: true,
         lifestyleHabits: true,
         lifestyleFun: true,
+        lifestyleDesires: true,
         lifestylePriority: true,
         preferenceDrugForm: true,
         preferenceBudget: true,
@@ -130,6 +131,7 @@ export class BenfekController {
               lifestyle: {
                 habits: quizCode.lifestyleHabits,
                 funActivities: quizCode.lifestyleFun,
+                desires: quizCode.lifestyleDesires,
                 priority: quizCode.lifestylePriority,
               },
               preferences: {
@@ -232,6 +234,7 @@ export class BenfekController {
           basicHeight: 'basicHeight',
           lifestyleHabits: 'lifestyleHabits',
           lifestyleFun: 'lifestyleFun',
+          lifestyleDesires: 'lifestyleDesires',
           lifestylePriority: 'lifestylePriority',
           preferenceDrugForm: 'preferenceDrugForm',
           preferenceBudget: 'preferenceBudget',
