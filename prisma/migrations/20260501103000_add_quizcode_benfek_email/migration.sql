@@ -1,0 +1,1 @@
+ALTER TABLE `QuizCode` ADD COLUMN `benfekEmail` VARCHAR(191) NULL;

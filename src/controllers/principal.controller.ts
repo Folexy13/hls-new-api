@@ -155,8 +155,8 @@ export class PrincipalController extends BaseController {
         return ResponseUtil.error(res, 'Invalid credit id', 400);
       }
 
-      await this.principalService.resolvePrincipalCredit(req.user.id, creditId);
-      return ResponseUtil.success(res, { id: creditId }, 'Credit resolved');
+      const summary = await this.principalService.resolvePrincipalCredit(req.user.id, creditId);
+      return ResponseUtil.success(res, { id: creditId, summary }, 'Credit resolved');
     } catch (error) {
       return ResponseUtil.error(res, (error as Error).message || 'Failed to resolve credit');
     }

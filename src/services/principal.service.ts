@@ -159,12 +159,19 @@ export class PrincipalService {
     const wallet = await this.walletRepository.findByUserId(userId);
     const withdrawals = await this.withdrawalRepository.findByUserId(userId);
     const unresolvedCredits = await this.prisma.$queryRawUnsafe<any[]>(
-      `SELECT id, supplement, amount, costPrice, markupFactor, createdAt, status
+      `SELECT id, packId, packName, benfekName, supplement, amount, costPrice, markupFactor,
+              taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare,
+              createdAt, status
        FROM PrincipalCredit
        WHERE principalId = ? AND status = 'unresolved'
        ORDER BY createdAt DESC`,
       userId
     ).catch(() => []);
+    const unresolvedPrincipalShare = Array.isArray(unresolvedCredits)
+      ? unresolvedCredits.reduce((sum: number, credit: any) => sum + Number(credit.principalShare || 0), 0)
+      : 0;
+    const walletBalance = Number(wallet?.balance ?? 0);
+    const withdrawableBalance = Math.max(0, walletBalance - unresolvedPrincipalShare);
 
     const totals = withdrawals.reduce(
       (acc, w) => {
@@ -177,14 +184,22 @@ export class PrincipalService {
     );
 
     return {
-      walletBalance: wallet?.balance ?? 0,
+      walletBalance,
+      withdrawableBalance,
       unresolvedCredits: Array.isArray(unresolvedCredits)
         ? unresolvedCredits.map((credit: any) => ({
             id: Number(credit.id),
+            packId: String(credit.packId || ''),
+            packName: String(credit.packName || ''),
+            benfekName: String(credit.benfekName || ''),
             supplement: String(credit.supplement || ''),
             amount: Number(credit.amount || 0),
             costPrice: Number(credit.costPrice || 0),
             markupFactor: Number(credit.markupFactor || 1.3),
+            taxAmount: Number(credit.taxAmount || 0),
+            serviceChargeAmount: Number(credit.serviceChargeAmount || 0),
+            hlsCommissionAmount: Number(credit.hlsCommissionAmount || 0),
+            principalShare: Number(credit.principalShare || 0),
             date: credit.createdAt ? new Date(credit.createdAt).toLocaleDateString() : 'Recently',
             status: String(credit.status || 'unresolved'),
           }))
@@ -199,10 +214,15 @@ export class PrincipalService {
   }
 
   async resolvePrincipalCredit(userId: number, creditId: number) {
-    await this.prisma.$executeRawUnsafe(
+    const result = await this.prisma.$executeRawUnsafe(
       `UPDATE PrincipalCredit SET status = 'resolved', updatedAt = NOW() WHERE id = ? AND principalId = ?`,
       creditId,
       userId
     );
+    if (!result) {
+      throw new Error('Credit not found');
+    }
+
+    return this.getIncomeSummary(userId);
   }
 }
