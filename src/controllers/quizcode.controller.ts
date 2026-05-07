@@ -79,6 +79,8 @@ export class QuizCodeController extends BaseController {
         benfekPhone: data.benfekPhone,
         benfekAge: data.benfekAge,
         benfekGender: data.benfekGender,
+        benfekWeight: data.benfekWeight,
+        benfekHeight: data.benfekHeight,
         allergies: data.allergies,
         scares: data.scares,
         familyCondition: data.familyCondition,
@@ -145,6 +147,10 @@ export class QuizCodeController extends BaseController {
         benfekName: result.quizCode.benfekName,
         benfekEmail: result.quizCode.benfekEmail,
         benfekPhone: result.quizCode.benfekPhone,
+        benfekAge: result.quizCode.benfekAge,
+        benfekGender: result.quizCode.benfekGender,
+        benfekWeight: result.quizCode.basicWeight,
+        benfekHeight: result.quizCode.basicHeight,
         createdBy: {
           firstName: result.quizCode.creator.firstName,
           lastName: result.quizCode.creator.lastName,
@@ -200,6 +206,10 @@ export class QuizCodeController extends BaseController {
         benfekName: quizCode.benfekName,
         benfekEmail: quizCode.benfekEmail,
         benfekPhone: quizCode.benfekPhone,
+        benfekAge: quizCode.benfekAge,
+        benfekGender: quizCode.benfekGender,
+        benfekWeight: quizCode.basicWeight,
+        benfekHeight: quizCode.basicHeight,
         registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
         usedAt: quizCode.usedAt
       };
@@ -253,6 +263,8 @@ export class QuizCodeController extends BaseController {
         benfekName: quizCode.benfekName,
         benfekEmail: quizCode.benfekEmail,
         benfekPhone: quizCode.benfekPhone,
+        benfekWeight: quizCode.basicWeight,
+        benfekHeight: quizCode.basicHeight,
         benfekAge: (quizCode as any).benfekAge,
         benfekGender: (quizCode as any).benfekGender,
         registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
@@ -338,10 +350,11 @@ export class QuizCodeController extends BaseController {
 
       const updated = await this.quizCodeRepository.completeBenfekQuiz(data.code.toUpperCase(), {
         basicNickname: data.basics.nickname,
-        basicWeight: data.basics.weight,
-        basicHeight: data.basics.height,
+        basicWeight: data.basics.weight || validation.quizCode.basicWeight || undefined,
+        basicHeight: data.basics.height || validation.quizCode.basicHeight || undefined,
         lifestyleHabits: data.lifestyle.habits,
         lifestyleFun: data.lifestyle.funActivities,
+        lifestyleDesires: data.lifestyle.desires,
         lifestylePriority: data.lifestyle.priority,
         preferenceDrugForm: data.preferences.drugForm,
         preferenceBudget: data.preferences.budget,

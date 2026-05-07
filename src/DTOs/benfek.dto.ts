@@ -42,6 +42,7 @@ export const UpdateBenfekProfileSchema = z
     basicHeight: optionalTrimmedString,
     lifestyleHabits: optionalTrimmedString,
     lifestyleFun: optionalTrimmedString,
+    lifestyleDesires: optionalTrimmedString,
     lifestylePriority: optionalTrimmedString,
     preferenceDrugForm: optionalTrimmedString,
     preferenceBudget: z.number().finite().nonnegative().optional(),

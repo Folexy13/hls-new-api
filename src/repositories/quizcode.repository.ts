@@ -10,6 +10,8 @@ export interface CreateQuizCodeDTO {
   benfekPhone: string;
   benfekAge: string;
   benfekGender: string;
+  benfekWeight: string;
+  benfekHeight: string;
   allergies?: string[];
   scares?: string[];
   familyCondition?: string[];
@@ -62,6 +64,8 @@ export class QuizCodeRepository {
         benfekPhone: data.benfekPhone,
         benfekAge: data.benfekAge,
         benfekGender: data.benfekGender,
+        basicWeight: data.benfekWeight,
+        basicHeight: data.benfekHeight,
         allergies: (data.allergies as unknown as Prisma.InputJsonValue | undefined),
         scares: (data.scares as unknown as Prisma.InputJsonValue | undefined),
         familyCondition: (data.familyCondition as unknown as Prisma.InputJsonValue | undefined),
@@ -138,10 +142,11 @@ export class QuizCodeRepository {
     code: string,
     data: {
       basicNickname?: string;
-      basicWeight: string;
-      basicHeight: string;
+      basicWeight?: string;
+      basicHeight?: string;
       lifestyleHabits: string;
       lifestyleFun: string;
+      lifestyleDesires: string;
       lifestylePriority: string;
       preferenceDrugForm: string;
       preferenceBudget: number;
@@ -151,10 +156,11 @@ export class QuizCodeRepository {
       where: { code },
       data: {
         basicNickname: data.basicNickname,
-        basicWeight: data.basicWeight,
-        basicHeight: data.basicHeight,
+        ...(data.basicWeight ? { basicWeight: data.basicWeight } : {}),
+        ...(data.basicHeight ? { basicHeight: data.basicHeight } : {}),
         lifestyleHabits: data.lifestyleHabits,
         lifestyleFun: data.lifestyleFun,
+        lifestyleDesires: data.lifestyleDesires,
         lifestylePriority: data.lifestylePriority,
         preferenceDrugForm: data.preferenceDrugForm,
         preferenceBudget: data.preferenceBudget,

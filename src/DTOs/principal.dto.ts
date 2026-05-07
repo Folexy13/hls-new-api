@@ -48,6 +48,8 @@ export const CreateBenfekRecordSchema = z.object({
   benfekPhone: z.string().min(10, 'Phone must be at least 10 characters'),
   benfekAge: z.string().min(1, 'Age is required'),
   benfekGender: z.string().min(1, "Gender is required"),
+  benfekWeight: z.string().min(1, 'Weight is required'),
+  benfekHeight: z.string().min(1, 'Height is required'),
   allergies: optionalMultiValueField,
   scares: optionalMultiValueField,
   familyCondition: optionalMultiValueField,
