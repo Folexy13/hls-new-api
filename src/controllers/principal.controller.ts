@@ -147,6 +147,56 @@ export class PrincipalController extends BaseController {
     }
   }
 
+  async getNotificationSummary(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const summary = await this.principalService.getNotificationSummary(req.user.id);
+      return ResponseUtil.success(res, summary, 'Notification summary retrieved');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to retrieve notification summary');
+    }
+  }
+
+  async markNotificationRead(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const notificationId = Number.parseInt(String(req.params.id), 10);
+      if (!notificationId) {
+        return ResponseUtil.error(res, 'Invalid notification id', 400);
+      }
+
+      await this.principalService.markNotificationRead(req.user.id, notificationId);
+      return ResponseUtil.success(res, { id: notificationId }, 'Notification marked as read');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to mark notification as read');
+    }
+  }
+
+  async markAllNotificationsRead(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      await this.principalService.markAllNotificationsRead(req.user.id);
+      return ResponseUtil.success(res, {}, 'Notifications marked as read');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to mark notifications as read');
+    }
+  }
+
+  async deleteNotification(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const notificationId = Number.parseInt(String(req.params.id), 10);
+      if (!notificationId) {
+        return ResponseUtil.error(res, 'Invalid notification id', 400);
+      }
+
+      await this.principalService.deleteNotification(req.user.id, notificationId);
+      return ResponseUtil.success(res, { id: notificationId }, 'Notification deleted');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to delete notification');
+    }
+  }
+
   async resolveCredit(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensurePrincipalRole(req, res)) return;

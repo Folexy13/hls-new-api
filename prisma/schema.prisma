@@ -66,6 +66,7 @@ model User {
   orders        Order[]
   payments      Payment[]
   inbox         Inbox[]
+  principalNotifications PrincipalNotification[]
   wallet        Wallet?
   withdrawals   Withdrawal[]
   principalCredits PrincipalCredit[]
@@ -260,6 +261,26 @@ model Inbox {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PrincipalNotification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  sourceKey String
+  title     String
+  message   String   @db.Text
+  href      String?  @db.Text
+  count     Int      @default(1)
+  fingerprint String @db.Text
+  isRead    Boolean  @default(false)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, sourceKey])
+  @@index([userId, isRead, isDeleted])
 }
 
 model Wallet {
