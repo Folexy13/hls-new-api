@@ -159,6 +159,347 @@ export class BenfekController {
     message: z.string().trim().min(1, 'Message is required'),
   });
 
+  private async syncBenfekNotifications(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        phone: true,
+        whatsappNumber: true,
+        deliveryAddress: true,
+        dropOffAddress: true,
+        preferredPharmacyName: true,
+        preferredPharmacyPhone: true,
+      },
+    });
+
+    const quizCodes = await this.prisma.quizCode.findMany({
+      where: { usedBy: userId, isUsed: true },
+      select: { code: true },
+    });
+    const quizCodeValues = quizCodes.map((quizCode) => quizCode.code);
+
+    const [
+      unreadNoticeCount,
+      cartItemCount,
+      failedPaymentCount,
+      activeOrderCount,
+      readyPacks,
+    ] = await Promise.all([
+      this.prisma.inbox.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      }),
+      this.prisma.cartItem.count({
+        where: {
+          cart: { userId },
+        },
+      }),
+      this.prisma.payment.count({
+        where: {
+          userId,
+          status: 'failed',
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          userId,
+          status: { in: ['paid', 'processing', 'shipped'] },
+        },
+      }),
+      quizCodeValues.length
+        ? this.prisma.researcherPack.findMany({
+            where: {
+              quizCode: { in: quizCodeValues },
+              status: 'dispatched',
+            },
+            select: {
+              packId: true,
+              items: { select: { id: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const successfulPackPayments = await this.prisma.payment.findMany({
+      where: {
+        userId,
+        status: 'success',
+      },
+      select: { metadata: true },
+    });
+    const paidPackIds = new Set<string>();
+    for (const payment of successfulPackPayments) {
+      if (!payment.metadata) continue;
+      try {
+        const metadata = JSON.parse(payment.metadata) as { packId?: unknown };
+        if (typeof metadata.packId === 'string' && metadata.packId.trim()) {
+          paidPackIds.add(metadata.packId.trim());
+        }
+      } catch {
+        // Ignore malformed payment metadata.
+      }
+    }
+
+    const unpaidReadyPackCount = readyPacks.filter(
+      (pack) => pack.items.length > 0 && !paidPackIds.has(pack.packId)
+    ).length;
+
+    const missingProfileFields = [
+      ['WhatsApp or phone number', user?.whatsappNumber || user?.phone],
+      ['Delivery address', user?.deliveryAddress],
+      ['Preferred pharmacy', user?.preferredPharmacyName],
+      ['Preferred pharmacy phone', user?.preferredPharmacyPhone],
+    ]
+      .filter(([, value]) => !String(value || '').trim())
+      .map(([label]) => label);
+
+    const detectedItems = [
+      ...(unpaidReadyPackCount > 0
+        ? [{
+            sourceKey: 'benfek_pack_ready',
+            type: 'benfek_pack_ready',
+            title: 'Nutrient packs ready',
+            message: `${unpaidReadyPackCount} nutrient pack${unpaidReadyPackCount === 1 ? ' is' : 's are'} ready for review or payment.`,
+            count: unpaidReadyPackCount,
+            href: '/benfek/dashboard',
+          }]
+        : []),
+      ...(activeOrderCount > 0
+        ? [{
+            sourceKey: 'benfek_order_active',
+            type: 'benfek_order_active',
+            title: 'Order update',
+            message: `${activeOrderCount} order${activeOrderCount === 1 ? ' is' : 's are'} paid, processing, or on the way.`,
+            count: activeOrderCount,
+            href: '/benfek/account',
+          }]
+        : []),
+      ...(failedPaymentCount > 0
+        ? [{
+            sourceKey: 'benfek_payment_failed',
+            type: 'benfek_payment_failed',
+            title: 'Payment needs attention',
+            message: `${failedPaymentCount} payment attempt${failedPaymentCount === 1 ? ' has' : 's have'} failed. Please retry checkout if needed.`,
+            count: failedPaymentCount,
+            href: '/cart',
+          }]
+        : []),
+      ...(unreadNoticeCount > 0
+        ? [{
+            sourceKey: 'benfek_hls_notice',
+            type: 'benfek_hls_notice',
+            title: 'New HLS notice',
+            message: `${unreadNoticeCount} unread support or HLS notice${unreadNoticeCount === 1 ? '' : 's'} need your attention.`,
+            count: unreadNoticeCount,
+            href: '/support',
+          }]
+        : []),
+      ...(cartItemCount > 0
+        ? [{
+            sourceKey: 'benfek_cart_waiting',
+            type: 'benfek_cart_waiting',
+            title: 'Items in cart',
+            message: `${cartItemCount} item${cartItemCount === 1 ? ' is' : 's are'} waiting in your cart.`,
+            count: cartItemCount,
+            href: '/cart',
+          }]
+        : []),
+      ...(missingProfileFields.length > 0
+        ? [{
+            sourceKey: 'benfek_complete_profile',
+            type: 'benfek_complete_profile',
+            title: 'Complete your profile',
+            message: `Add ${missingProfileFields.slice(0, 3).join(', ')}${missingProfileFields.length > 3 ? ', and more' : ''}.`,
+            count: 1,
+            href: '/benfek/profile',
+          }]
+        : []),
+      ...(quizCodeValues.length === 0
+        ? [{
+            sourceKey: 'benfek_quiz_link_missing',
+            type: 'benfek_quiz_link_missing',
+            title: 'Complete your assessment',
+            message: 'Validate your quiz code or complete the assessment so HLS can personalize your experience.',
+            count: 1,
+            href: '/assessment',
+          }]
+        : []),
+    ];
+
+    const activeSourceKeys = detectedItems.map((item) => item.sourceKey);
+    const existingNotifications = await this.prisma.principalNotification.findMany({
+      where: {
+        userId,
+        sourceKey: { in: activeSourceKeys.length ? activeSourceKeys : ['__none__'] },
+      },
+    });
+    const existingBySourceKey = new Map(
+      existingNotifications.map((notification) => [notification.sourceKey, notification])
+    );
+
+    await Promise.all(
+      detectedItems.map((item) => {
+        const fingerprint = JSON.stringify({
+          count: item.count,
+          message: item.message,
+          href: item.href,
+        });
+        const existing = existingBySourceKey.get(item.sourceKey);
+        if (!existing) {
+          return this.prisma.principalNotification.create({
+            data: {
+              userId,
+              sourceKey: item.sourceKey,
+              type: item.type,
+              title: item.title,
+              message: item.message,
+              href: item.href,
+              count: item.count,
+              fingerprint,
+            },
+          });
+        }
+
+        const conditionChanged = existing.fingerprint !== fingerprint;
+        return this.prisma.principalNotification.update({
+          where: { id: existing.id },
+          data: {
+            type: item.type,
+            title: item.title,
+            message: item.message,
+            href: item.href,
+            count: item.count,
+            fingerprint,
+            isRead: conditionChanged ? false : existing.isRead,
+            isDeleted: conditionChanged ? false : existing.isDeleted,
+          },
+        });
+      })
+    );
+
+    const benfekSourcePrefix = 'benfek_';
+    if (activeSourceKeys.length > 0) {
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          userId,
+          sourceKey: { startsWith: benfekSourcePrefix, notIn: activeSourceKeys },
+          isDeleted: false,
+        },
+        data: { isRead: true, isDeleted: true },
+      });
+    } else {
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          userId,
+          sourceKey: { startsWith: benfekSourcePrefix },
+          isDeleted: false,
+        },
+        data: { isRead: true, isDeleted: true },
+      });
+    }
+
+    const notifications = await this.prisma.principalNotification.findMany({
+      where: {
+        userId,
+        sourceKey: { startsWith: benfekSourcePrefix },
+        isDeleted: false,
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    const items = notifications.map((notification) => ({
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      href: notification.href,
+      count: notification.count,
+      isRead: notification.isRead,
+      updatedAt: notification.updatedAt,
+    }));
+
+    return {
+      count: items
+        .filter((item) => !item.isRead)
+        .reduce((sum, item) => sum + Number(item.count || 0), 0),
+      packs: { readyCount: unpaidReadyPackCount },
+      orders: { activeCount: activeOrderCount },
+      payments: { failedCount: failedPaymentCount },
+      cart: { itemCount: cartItemCount },
+      hlsNotices: { unreadCount: unreadNoticeCount },
+      profile: {
+        incomplete: missingProfileFields.length > 0,
+        missingFields: missingProfileFields,
+      },
+      assessment: { linkedQuizCodes: quizCodeValues.length },
+      items,
+    };
+  }
+
+  getNotificationSummary = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+
+      const summary = await this.syncBenfekNotifications(userId);
+      return ResponseUtil.success(res, summary, 'Benfek notification summary retrieved');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve benfek notifications', 500, error);
+    }
+  };
+
+  markAllNotificationsRead = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          userId,
+          sourceKey: { startsWith: 'benfek_' },
+          isDeleted: false,
+          isRead: false,
+        },
+        data: { isRead: true },
+      });
+      return ResponseUtil.success(res, { read: true }, 'Benfek notifications marked as read');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to mark benfek notifications as read', 500, error);
+    }
+  };
+
+  deleteNotification = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const notificationId = Number.parseInt(String(req.params.id), 10);
+      if (!userId) {
+        return ResponseUtil.error(res, 'Authentication required', 401);
+      }
+      if (!notificationId) {
+        return ResponseUtil.error(res, 'Invalid notification id', 400);
+      }
+
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          id: notificationId,
+          userId,
+          sourceKey: { startsWith: 'benfek_' },
+          isDeleted: false,
+        },
+        data: { isDeleted: true, isRead: true },
+      });
+      return ResponseUtil.success(res, { id: notificationId }, 'Benfek notification deleted');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to delete benfek notification', 500, error);
+    }
+  };
+
   getProfile = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
