@@ -213,6 +213,370 @@ export class PrincipalService {
     };
   }
 
+  async getNotificationSummary(userId: number) {
+    const staleCodeDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const recentDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+    const [
+      principal,
+      unreadInboxCount,
+      recentCompletedRegistrationCount,
+      quizCompletedAccountPendingCount,
+      staleUnusedCodeCount,
+      pendingWithdrawalCount,
+      failedWithdrawalCount,
+      packReadyCount,
+      unresolvedCredits,
+    ] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          profession: true,
+          currentPlaceOfWork: true,
+          licenseNumber: true,
+          yearsOfExperience: true,
+          bankName: true,
+          accountNumber: true,
+          accountName: true,
+          preferredPaymentMethod: true,
+        },
+      }),
+      this.prisma.inbox.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      }),
+      this.prisma.quizCode.count({
+        where: {
+          createdBy: userId,
+          isUsed: true,
+          usedBy: { not: null },
+          usedAt: { gte: recentDate },
+        },
+      }),
+      this.prisma.quizCode.count({
+        where: {
+          createdBy: userId,
+          isUsed: true,
+          usedBy: null,
+        },
+      }),
+      this.prisma.quizCode.count({
+        where: {
+          createdBy: userId,
+          isUsed: false,
+          createdAt: { lte: staleCodeDate },
+        },
+      }),
+      this.prisma.withdrawal.count({
+        where: {
+          userId,
+          status: { in: ['pending', 'processing'] },
+        },
+      }),
+      this.prisma.withdrawal.count({
+        where: {
+          userId,
+          status: 'failed',
+        },
+      }),
+      this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT rp.id
+         FROM ResearcherPack rp
+         INNER JOIN QuizCode qc ON qc.code = rp.quizCode
+         WHERE qc.createdBy = ? AND rp.status = 'dispatched'`,
+        userId
+      ).then((rows) => Array.isArray(rows) ? rows.length : 0).catch(() => 0),
+      this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, packName, benfekName, amount, principalShare, createdAt
+         FROM PrincipalCredit
+         WHERE principalId = ? AND status = 'unresolved'
+         ORDER BY createdAt DESC`,
+        userId
+      ).catch(() => []),
+    ]);
+
+    const missingProfileFields = [
+      ['Profession', principal?.profession],
+      ['Current place of work', principal?.currentPlaceOfWork],
+      ['License number', principal?.licenseNumber],
+      ['Years of experience', principal?.yearsOfExperience],
+      ['Preferred payment method', principal?.preferredPaymentMethod],
+      ['Bank name', principal?.bankName],
+      ['Account number', principal?.accountNumber],
+      ['Account name', principal?.accountName],
+    ]
+      .filter(([, value]) => !String(value || '').trim())
+      .map(([label]) => label);
+
+    const unresolvedCreditCount = Array.isArray(unresolvedCredits) ? unresolvedCredits.length : 0;
+    const unresolvedCreditAmount = Array.isArray(unresolvedCredits)
+      ? unresolvedCredits.reduce((sum, credit) => sum + Number(credit.principalShare || 0), 0)
+      : 0;
+
+    const detectedItems = [
+      ...(pendingWithdrawalCount > 0
+        ? [{
+            sourceKey: 'withdrawal_pending',
+            type: 'withdrawal_pending',
+            title: 'Withdrawal in progress',
+            message: `${pendingWithdrawalCount} withdrawal request${pendingWithdrawalCount === 1 ? ' is' : 's are'} still pending or processing.`,
+            count: pendingWithdrawalCount,
+            href: '/principal/withdraw?tab=withdraw',
+          }]
+        : []),
+      ...(failedWithdrawalCount > 0
+        ? [{
+            sourceKey: 'withdrawal_failed',
+            type: 'withdrawal_failed',
+            title: 'Withdrawal needs attention',
+            message: `${failedWithdrawalCount} withdrawal request${failedWithdrawalCount === 1 ? ' has' : 's have'} failed. Check payment details or try again.`,
+            count: failedWithdrawalCount,
+            href: '/principal/withdraw?tab=withdraw',
+          }]
+        : []),
+      ...(unresolvedCreditCount > 0
+        ? [{
+            sourceKey: 'credit_resolution',
+            type: 'credit_resolution',
+            title: 'Resolve principal credits',
+            message: `${unresolvedCreditCount} wallet credit${unresolvedCreditCount === 1 ? ' needs' : 's need'} resolution before ${unresolvedCreditCount === 1 ? 'it becomes' : 'they become'} withdrawable.`,
+            count: unresolvedCreditCount,
+            href: '/principal/withdraw?tab=unresolved',
+          }]
+        : []),
+      ...(unreadInboxCount > 0
+        ? [{
+            sourceKey: 'hls_notice',
+            type: 'hls_notice',
+            title: 'New HLS notices',
+            message: `${unreadInboxCount} unread notice${unreadInboxCount === 1 ? '' : 's'} from HLS.`,
+            count: unreadInboxCount,
+            href: '/principal/my-profile?tab=settings&section=notifications',
+          }]
+        : []),
+      ...(recentCompletedRegistrationCount > 0
+        ? [{
+            sourceKey: 'benfek_registration',
+            type: 'benfek_registration',
+            title: 'Benfek registrations completed',
+            message: `${recentCompletedRegistrationCount} benfek${recentCompletedRegistrationCount === 1 ? ' has' : 's have'} completed account creation recently.`,
+            count: recentCompletedRegistrationCount,
+            href: '/principal/benfeks',
+          }]
+        : []),
+      ...(quizCompletedAccountPendingCount > 0
+        ? [{
+            sourceKey: 'benfek_account_pending',
+            type: 'benfek_account_pending',
+            title: 'Benfeks need to finish account setup',
+            message: `${quizCompletedAccountPendingCount} benfek${quizCompletedAccountPendingCount === 1 ? ' has' : 's have'} completed the quiz but not final account creation.`,
+            count: quizCompletedAccountPendingCount,
+            href: '/principal/benfeks',
+          }]
+        : []),
+      ...(staleUnusedCodeCount > 0
+        ? [{
+            sourceKey: 'unused_quiz_codes',
+            type: 'unused_quiz_codes',
+            title: 'Unused quiz codes',
+            message: `${staleUnusedCodeCount} quiz code${staleUnusedCodeCount === 1 ? ' is' : 's are'} older than 48 hours and still unused.`,
+            count: staleUnusedCodeCount,
+            href: '/principal/benfeks',
+          }]
+        : []),
+      ...(packReadyCount > 0
+        ? [{
+            sourceKey: 'pack_ready',
+            type: 'pack_ready',
+            title: 'Supplement packs ready',
+            message: `${packReadyCount} researcher pack${packReadyCount === 1 ? ' is' : 's are'} dispatched and ready for benfek action.`,
+            count: packReadyCount,
+            href: '/principal/benfeks',
+          }]
+        : []),
+      ...(missingProfileFields.length > 0
+        ? [{
+            sourceKey: 'complete_profile',
+            type: 'complete_profile',
+            title: 'Complete your profile',
+            message: `Add ${missingProfileFields.slice(0, 3).join(', ')}${missingProfileFields.length > 3 ? ', and more' : ''}.`,
+            count: 1,
+            href: '/principal/my-profile?tab=settings&section=payments',
+          }]
+        : []),
+    ];
+
+    const activeSourceKeys = detectedItems.map((item) => item.sourceKey);
+    const existingNotifications = await this.prisma.principalNotification.findMany({
+      where: {
+        userId,
+        sourceKey: { in: activeSourceKeys.length ? activeSourceKeys : ['__none__'] },
+      },
+    });
+    const existingBySourceKey = new Map(
+      existingNotifications.map((notification) => [notification.sourceKey, notification])
+    );
+
+    await Promise.all(
+      detectedItems.map((item) => {
+        const fingerprint = JSON.stringify({
+          count: item.count,
+          message: item.message,
+          href: item.href,
+        });
+        const existing = existingBySourceKey.get(item.sourceKey);
+
+        if (!existing) {
+          return this.prisma.principalNotification.create({
+            data: {
+              userId,
+              sourceKey: item.sourceKey,
+              type: item.type,
+              title: item.title,
+              message: item.message,
+              href: item.href,
+              count: item.count,
+              fingerprint,
+            },
+          });
+        }
+
+        const conditionChanged = existing.fingerprint !== fingerprint;
+        return this.prisma.principalNotification.update({
+          where: { id: existing.id },
+          data: {
+            type: item.type,
+            title: item.title,
+            message: item.message,
+            href: item.href,
+            count: item.count,
+            fingerprint,
+            isRead: conditionChanged ? false : existing.isRead,
+            isDeleted: conditionChanged ? false : existing.isDeleted,
+          },
+        });
+      })
+    );
+
+    if (activeSourceKeys.length > 0) {
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          userId,
+          sourceKey: { notIn: activeSourceKeys },
+          isDeleted: false,
+        },
+        data: {
+          isRead: true,
+          isDeleted: true,
+        },
+      });
+    } else {
+      await this.prisma.principalNotification.updateMany({
+        where: {
+          userId,
+          isDeleted: false,
+        },
+        data: {
+          isRead: true,
+          isDeleted: true,
+        },
+      });
+    }
+
+    const notifications = await this.prisma.principalNotification.findMany({
+      where: {
+        userId,
+        isDeleted: false,
+      },
+      orderBy: [
+        { updatedAt: 'desc' },
+      ],
+    });
+
+    const items = notifications.map((notification) => ({
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      href: notification.href,
+      count: notification.count,
+      isRead: notification.isRead,
+      updatedAt: notification.updatedAt,
+    }));
+
+    return {
+      count: items
+        .filter((item) => !item.isRead)
+        .reduce((sum, item) => sum + Number(item.count || 0), 0),
+      walletCredits: {
+        unresolvedCount: unresolvedCreditCount,
+        unresolvedAmount: unresolvedCreditAmount,
+      },
+      withdrawals: {
+        pendingCount: pendingWithdrawalCount,
+        failedCount: failedWithdrawalCount,
+      },
+      benfekRegistrations: {
+        recentCompletedCount: recentCompletedRegistrationCount,
+        quizCompletedAccountPendingCount,
+        staleUnusedCodeCount,
+      },
+      packs: {
+        readyCount: packReadyCount,
+      },
+      hlsNotices: {
+        unreadCount: unreadInboxCount,
+      },
+      profile: {
+        incomplete: missingProfileFields.length > 0,
+        missingFields: missingProfileFields,
+      },
+      items,
+    };
+  }
+
+  async markNotificationRead(userId: number, notificationId: number) {
+    return this.prisma.principalNotification.updateMany({
+      where: {
+        id: notificationId,
+        userId,
+        isDeleted: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+  }
+
+  async markAllNotificationsRead(userId: number) {
+    return this.prisma.principalNotification.updateMany({
+      where: {
+        userId,
+        isDeleted: false,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+  }
+
+  async deleteNotification(userId: number, notificationId: number) {
+    return this.prisma.principalNotification.updateMany({
+      where: {
+        id: notificationId,
+        userId,
+        isDeleted: false,
+      },
+      data: {
+        isDeleted: true,
+        isRead: true,
+      },
+    });
+  }
+
   async resolvePrincipalCredit(userId: number, creditId: number) {
     const result = await this.prisma.$executeRawUnsafe(
       `UPDATE PrincipalCredit SET status = 'resolved', updatedAt = NOW() WHERE id = ? AND principalId = ?`,
