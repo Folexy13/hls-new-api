@@ -10,6 +10,9 @@ export const createBenfekRoutes = (container: Container): Router => {
   const authGuard = container.get(AuthGuard);
 
   router.get('/profile', authGuard.verify(), authenticatedHandler(benfekController.getProfile));
+  router.get('/notifications', authGuard.verify(), authenticatedHandler(benfekController.getNotificationSummary));
+  router.patch('/notifications/read-all', authGuard.verify(), authenticatedHandler(benfekController.markAllNotificationsRead));
+  router.delete('/notifications/:id', authGuard.verify(), authenticatedHandler(benfekController.deleteNotification));
   router.put('/profile', authGuard.verify(), authenticatedHandler(benfekController.updateProfile));
   router.put('/password', authGuard.verify(), authenticatedHandler(benfekController.changePassword));
   router.get('/orders', authGuard.verify(), authenticatedHandler(benfekController.getOrders));
