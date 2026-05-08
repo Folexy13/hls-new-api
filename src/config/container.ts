@@ -41,7 +41,7 @@ const container = new Container();
 container.bind<Container>(Container).toConstantValue(container);
 
 // Initialize PrismaClient
-const prisma = new PrismaClient({});
+const prisma = new PrismaClient();
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma);
 
 // Bind repositories
