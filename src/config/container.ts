@@ -43,7 +43,15 @@ const container = new Container();
 container.bind<Container>(Container).toConstantValue(container);
 
 // Initialize PrismaClient
-const prisma = new PrismaClient({});
+const dbUrl = process.env.DATABASE_URL || '';
+const prismaOptions: any = {};
+
+// Only pass accelerateUrl if it's an actual Prisma Accelerate URL
+if (dbUrl.startsWith('prisma://') || dbUrl.startsWith('prisma+postgres://')) {
+  prismaOptions.accelerateUrl = dbUrl;
+}
+
+const prisma = new PrismaClient(prismaOptions);
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma as any);
 
 // Bind repositories
