@@ -265,4 +265,36 @@ export class AuthController extends BaseController {
       return ResponseUtil.error(res, 'Logout failed', 500, error);
     }
   }
+
+  forgotPassword: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return ResponseUtil.error(res, 'Email is required', 400);
+      }
+      await this.authService.forgotPassword(email);
+      return ResponseUtil.success(res, null, 'If the email exists, a password reset link has been sent.');
+    } catch (error) {
+      if (error instanceof AppError) {
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
+      }
+      return ResponseUtil.error(res, 'Forgot password request failed', 500, error);
+    }
+  }
+
+  resetPassword: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token) {
+        return ResponseUtil.error(res, 'Token is required', 400);
+      }
+      const result = await this.authService.resetPassword(token, newPassword);
+      return ResponseUtil.success(res, result, 'Password reset successfully.');
+    } catch (error) {
+      if (error instanceof AppError) {
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
+      }
+      return ResponseUtil.error(res, 'Reset password failed', 500, error);
+    }
+  }
 }

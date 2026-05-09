@@ -12,6 +12,8 @@ export const createAuthRoutes = (container: Container): Router => {
   router.post('/login', authController.login.bind(authController));
   router.post('/refresh', authController.refreshToken.bind(authController));
   router.post('/logout', authController.logout.bind(authController));
+  router.post('/forgot-password', authController.forgotPassword.bind(authController));
+  router.post('/reset-password', authController.resetPassword.bind(authController));
 
   return router;
 };

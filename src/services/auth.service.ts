@@ -6,12 +6,15 @@ import AuthRepositoryImpl from "../repositories/auth.repo";
 import { ConflictError, UnauthorizedError } from "../utilities/errors";
 import { config } from "../config/config";
 import { NotificationService } from "../services/notification.service";
+import { EmailService } from "./email.service";
+import crypto from "crypto";
 
 @injectable()
 export class AuthService {
   constructor(
     @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {}
 
   async register(data: RegisterUserDTO) {
@@ -85,6 +88,46 @@ export class AuthService {
 
   async logout(refreshToken: string) {
     await this.authRepository.invalidateRefreshToken(refreshToken);
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.authRepository.findUserByEmail(email);
+    if (!user) {
+      // Don't leak if email exists
+      return;
+    }
+    
+    // Generate magic link token (short-lived JWT)
+    const resetToken = jwt.sign(
+      { userId: user.id },
+      config.jwtSecret,
+      { expiresIn: "1h" }
+    );
+    
+    // Send email using EmailService
+    await this.emailService.sendMagicLink(email, resetToken);
+  }
+
+  async resetPassword(token: string, newPassword?: string) {
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, config.jwtSecret);
+    } catch (e) {
+      throw new UnauthorizedError("Invalid or expired reset token.");
+    }
+
+    const user = await this.authRepository.findUserById(decoded.userId);
+    if (!user) {
+      throw new UnauthorizedError("User not found.");
+    }
+
+    if (newPassword) {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.authRepository.updateUserPassword(user.id, hashedPassword);
+    }
+    
+    // Return a fresh set of tokens if they clicked the magic link to just login
+    return this.createAuthResponse(user);
   }
 
   async registerBenfek(data: RegisterBenfekDTO) {

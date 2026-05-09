@@ -34,6 +34,8 @@ import { PrincipalController } from '../controllers/principal.controller';
 import { ResearcherController } from '../controllers/researcher.controller';
 import { BenfekController } from '../controllers/benfek.controller';
 import { NotificationService } from '../services/notification.service';
+import { OneSignalService } from '../services/onesignal.service';
+import { EmailService } from '../services/email.service';
 
 const container = new Container();
 
@@ -73,6 +75,8 @@ container.bind<CartService>(CartService).toSelf();
 container.bind<SupplementService>(SupplementService).toSelf();
 container.bind<NotificationService>(NotificationService).toSelf();
 container.bind<PrincipalService>(PrincipalService).toSelf();
+container.bind<OneSignalService>(OneSignalService).toSelf();
+container.bind<EmailService>(EmailService).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();

@@ -38,6 +38,19 @@ export default class AuthRepositoryImpl implements AuthRepository {
     });
   }
 
+  async findUserById(id: number): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { id }
+    });
+  }
+
+  async updateUserPassword(id: number, password: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { password }
+    });
+  }
+
   async findUserByUsername(username: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { username }
