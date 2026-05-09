@@ -37,7 +37,7 @@ export class OneSignalService {
 
   async sendMagicLink(toEmail: string, resetToken: string): Promise<boolean> {
     const frontendUrl = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
-    const magicLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+    const magicLink = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
     
     const subject = "Reset Your Password - HLS";
     const bodyHtml = `
