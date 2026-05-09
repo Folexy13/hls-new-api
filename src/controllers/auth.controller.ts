@@ -273,7 +273,7 @@ export class AuthController extends BaseController {
         return ResponseUtil.error(res, 'Email is required', 400);
       }
       await this.authService.forgotPassword(email);
-      return ResponseUtil.success(res, null, 'If the email exists, a password reset link has been sent.');
+      return ResponseUtil.success(res, null, 'A password reset link has been sent to your email.');
     } catch (error) {
       if (error instanceof AppError) {
         return ResponseUtil.error(res, error.message, error.statusCode, error);

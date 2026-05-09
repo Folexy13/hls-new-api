@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
-import { ConflictError, UnauthorizedError } from "../utilities/errors";
+import { ConflictError, UnauthorizedError, NotFoundError } from "../utilities/errors";
 import { config } from "../config/config";
 import { NotificationService } from "../services/notification.service";
 import { EmailService } from "./email.service";
@@ -93,8 +93,7 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.authRepository.findUserByEmail(email);
     if (!user) {
-      // Don't leak if email exists
-      return;
+      throw new NotFoundError("User with this email does not exist.");
     }
     
     // Generate magic link token (short-lived JWT)
