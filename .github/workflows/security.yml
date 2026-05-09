@@ -1,0 +1,89 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ "main", "master", "testing", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "testing", "develop" ]
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly on Sundays
+
+jobs:
+  semgrep:
+    name: Semgrep Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/default"
+          generateSarif: "1"
+
+  secret-scanning:
+    name: GitGuardian Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # fetch all history for accurate secret scanning
+      
+      - name: GitGuardian scan
+        uses: GitGuardian/ggshield-action@master
+        continue-on-error: true # Let it continue so we can email the results
+        env:
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
+          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run npm audit
+        continue-on-error: true
+        run: npm audit --audit-level=high > audit-report.txt || true
+      - name: Upload Audit Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: npm-audit-report
+          path: audit-report.txt
+
+  notify:
+    name: Email Contributors
+    runs-on: ubuntu-latest
+    needs: [semgrep, secret-scanning, dependency-scan]
+    if: always() # Run even if previous jobs failed
+    steps:
+      - name: Send status email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.resend.com
+          server_port: 465
+          username: resend
+          password: ${{ secrets.RESEND_API_KEY }}
+          subject: "Security Scan Status: ${{ github.repository }} (${{ github.workflow }})"
+          to: "contributors@yourdomain.com" # Replace with actual mailing list or specific emails
+          from: "Security Bot <tech@hlsnigeria.com>"
+          body: |
+            Security scan has completed for repository ${{ github.repository }}.
+            
+            Branch: ${{ github.ref_name }}
+            Triggered by: ${{ github.actor }}
+            Commit: ${{ github.sha }}
+            
+            Check the full security pipeline results here:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Please review any failed security checks immediately.
