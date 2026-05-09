@@ -457,6 +457,7 @@ export class ResearcherController {
                 return this.notificationService.sendEmail(
                   checker.email,
                   subject,
+                  // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
                   `<pre>${escapedText}</pre>`,
                   plainText
                 ).catch(() => undefined);
