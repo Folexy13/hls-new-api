@@ -13,19 +13,18 @@ jobs:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: "p/default"
-          generateSarif: "1"
+        uses: semgrep/semgrep-action@v1
+        env:
+          SEMGREP_RULES: p/default
 
   secret-scanning:
     name: GitGuardian Secret Scanning
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # fetch all history for accurate secret scanning
       
@@ -43,9 +42,9 @@ jobs:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -55,7 +54,7 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high > audit-report.txt || true
       - name: Upload Audit Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: npm-audit-report
           path: audit-report.txt

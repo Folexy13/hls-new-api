@@ -446,14 +446,21 @@ export class ResearcherController {
           await Promise.all(
             checkers
               .filter((checker: any) => checker.email)
-              .map((checker: any) =>
-                this.notificationService.sendEmail(
+              .map((checker: any) => {
+                const plainText = [baseMessage, '', 'Item sourcing', ...lines].join('\n');
+                const escapedText = plainText
+                  .replace(/&/g, '&')
+                  .replace(/</g, '<')
+                  .replace(/>/g, '>')
+                  .replace(/"/g, '"')
+                  .replace(/'/g, '&#039;');
+                return this.notificationService.sendEmail(
                   checker.email,
                   subject,
-                  `<pre>${[baseMessage, '', 'Item sourcing', ...lines].join('\n')}</pre>`,
-                  [baseMessage, '', 'Item sourcing', ...lines].join('\n')
-                ).catch(() => undefined)
-              )
+                  `<pre>${escapedText}</pre>`,
+                  plainText
+                ).catch(() => undefined);
+              })
           );
         }
 
