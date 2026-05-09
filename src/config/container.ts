@@ -43,9 +43,7 @@ const container = new Container();
 container.bind<Container>(Container).toConstantValue(container);
 
 // Initialize PrismaClient
-const prisma = new PrismaClient({
-  accelerateUrl: process.env.DATABASE_URL as string,
-});
+const prisma = new PrismaClient();
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma as any);
 
 // Bind repositories
