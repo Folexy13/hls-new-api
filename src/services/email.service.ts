@@ -6,7 +6,7 @@ import { config } from "../config/config";
 @injectable()
 export class EmailService {
   private resend: Resend;
-  private readonly fromEmail = config.email.from || "no-reply@hlsnigeria.com";
+  private readonly fromEmail = config.email.from || "admin@hlsnigeria.com";
 
   // Additional fallback API Keys
   private readonly ONE_SIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || "";

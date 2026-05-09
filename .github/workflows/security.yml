@@ -89,7 +89,7 @@ jobs:
           password: ${{ secrets.RESEND_API_KEY }}
           subject: "Security Scan Status: ${{ github.repository }} (${{ github.workflow }})"
           to: "contributors@yourdomain.com" # Replace with actual mailing list or specific emails
-          from: "Security Bot <tech@hlsnigeria.com>"
+          from: "Security Bot <admin@hlsnigeria.com>"
           body: |
             Security scan has completed for repository ${{ github.repository }}.
             
