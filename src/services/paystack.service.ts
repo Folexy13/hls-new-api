@@ -102,6 +102,18 @@ export class PaystackService {
     return response.data;
   }
 
+  static async getBanks() {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/bank?currency=NGN`,
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+    return Array.isArray(response.data?.data) ? response.data.data : [];
+  }
+
   static async resolveBankCode(bankName: string) {
     const response = await axios.get(
       `${PAYSTACK_BASE_URL}/bank?currency=NGN`,
@@ -121,5 +133,24 @@ export class PaystackService {
     }
 
     return String(match.code);
+  }
+
+  static async resolveAccountNumber(bankName: string, accountNumber: string) {
+    const bankCode = await this.resolveBankCode(bankName);
+    
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    if (!response.data?.data?.account_name) {
+      throw new Error('Could not resolve account name');
+    }
+
+    return response.data.data.account_name;
   }
 }

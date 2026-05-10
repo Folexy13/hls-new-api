@@ -317,4 +317,198 @@ export class NotificationService {
       whatsappCaption: options.caption,
     });
   }
+
+  async sendAssessmentCompletedMessage(options: {
+    phone?: string;
+    email?: string;
+    benfekName?: string;
+  }): Promise<NotificationResult> {
+    const text = `Hi ${options.benfekName ?? 'Benfek'}, your HLS assessment has been submitted successfully. Your health information is now ready for review, and you will be notified when your nutrient pack is available.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Assessment Completed',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendPaymentSuccessfulMessage(options: {
+    phone?: string;
+    email?: string;
+    orderNumber: string;
+    amount: number;
+  }): Promise<NotificationResult> {
+    const text = `Payment confirmed. Your HLS order #${options.orderNumber} for NGN ${options.amount} was successful. We’ll notify you as your pack moves to processing and delivery.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Payment Successful',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendPaymentFailedMessage(options: {
+    phone?: string;
+    email?: string;
+    orderNumber: string;
+  }): Promise<NotificationResult> {
+    const text = `Your HLS payment for order #${options.orderNumber} was not completed. Please return to your cart and try again, or contact support if you were debited.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Payment Failed',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendOrderProcessingMessage(options: {
+    phone?: string;
+    email?: string;
+    orderNumber: string;
+  }): Promise<NotificationResult> {
+    const text = `Your HLS order #${options.orderNumber} is now being processed. We’ll update you once it is ready for dispatch.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Order Processing',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendOrderDispatchedMessage(options: {
+    phone?: string;
+    email?: string;
+    orderNumber: string;
+    deliveryAddress: string;
+  }): Promise<NotificationResult> {
+    const text = `Your HLS order #${options.orderNumber} is on the way. Delivery address: ${options.deliveryAddress}. Please keep your phone available for the delivery contact.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Order Dispatched',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendOrderDeliveredMessage(options: {
+    phone?: string;
+    email?: string;
+    orderNumber: string;
+  }): Promise<NotificationResult> {
+    const text = `Your HLS order #${options.orderNumber} has been marked as delivered. We hope your pack supports your health journey. Contact support if anything is missing or damaged.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Order Delivered',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendCartReminderMessage(options: {
+    phone?: string;
+    email?: string;
+    itemCount: number;
+  }): Promise<NotificationResult> {
+    const cartLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/cart`;
+    const text = `You still have ${options.itemCount} item(s) waiting in your HLS cart. Complete checkout when you’re ready: ${cartLink}`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Cart Reminder',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendProfileIncompleteMessage(options: {
+    phone?: string;
+    email?: string;
+    missingFields: string;
+  }): Promise<NotificationResult> {
+    const profileLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/profile`;
+    const text = `Your HLS profile needs a quick update: ${options.missingFields}. Please complete it so we can process your packs smoothly: ${profileLink}`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Profile Incomplete',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendSupportTicketReceivedMessage(options: {
+    phone?: string;
+    email?: string;
+    subject: string;
+  }): Promise<NotificationResult> {
+    const text = `We’ve received your support request: "${options.subject}". HLS support will review it and get back to you.`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Support Request Received',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendSupportReplyMessage(options: {
+    phone?: string;
+    email?: string;
+    subject: string;
+  }): Promise<NotificationResult> {
+    const supportLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/support`;
+    const text = `You have a new HLS support update: "${options.subject}". Please check your support inbox: ${supportLink}`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Support Update',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
+
+  async sendAssessmentReminderMessage(options: {
+    phone?: string;
+    email?: string;
+    benfekName?: string;
+    code: string;
+  }): Promise<NotificationResult> {
+    const link = this.buildQuizLink(options.code);
+    const text = `Hi ${options.benfekName ?? 'Benfek'}, your HLS assessment is still pending. Use your code ${options.code} to complete it here: ${link}`;
+
+    return this.sendWhatsAppAndEmail({
+      phone: options.phone,
+      email: options.email,
+      subject: 'HLS Assessment Reminder',
+      html: `<p>${text}</p>`,
+      text,
+      whatsappText: text,
+    });
+  }
 }

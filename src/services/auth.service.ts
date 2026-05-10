@@ -96,11 +96,15 @@ export class AuthService {
       throw new NotFoundError("User with this email does not exist.");
     }
     
-    // Generate magic link token (short-lived JWT)
+    // Invalidate existing tokens first by updating the password slightly, or relying on something bound to the current state.
+    // However, generating a one-time token bound to the current password hash works best.
+    const secret = config.jwtSecret + user.password; // Token becomes invalid immediately if password is changed
+
+    // Generate magic link token (short-lived JWT - 15 minutes max)
     const resetToken = jwt.sign(
       { userId: user.id },
-      config.jwtSecret,
-      { expiresIn: "1h" }
+      secret,
+      { expiresIn: "15m" }
     );
     
     // Send email using EmailService
@@ -108,16 +112,24 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPassword?: string) {
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, config.jwtSecret);
-    } catch (e) {
-      throw new UnauthorizedError("Invalid or expired reset token.");
+    // We decode first without verifying to get the userId, so we can fetch the user's current password hash
+    const decodedUnverified = jwt.decode(token) as { userId: number } | null;
+    if (!decodedUnverified || !decodedUnverified.userId) {
+      throw new UnauthorizedError("Invalid reset token.");
     }
 
-    const user = await this.authRepository.findUserById(decoded.userId);
+    const user = await this.authRepository.findUserById(decodedUnverified.userId);
     if (!user) {
       throw new UnauthorizedError("User not found.");
+    }
+
+    const secret = config.jwtSecret + user.password;
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch (e) {
+      throw new UnauthorizedError("Invalid, expired, or already used reset token.");
     }
 
     if (newPassword) {

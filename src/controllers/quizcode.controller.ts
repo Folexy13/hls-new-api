@@ -5,6 +5,7 @@ import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.
 import { NotificationService } from '../services/notification.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
+import { PrismaClient } from '@prisma/client';
 import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
 import { formatHealthField } from '../utilities/health-field.utility';
 
@@ -13,6 +14,7 @@ export class QuizCodeController extends BaseController {
   constructor(
     container: Container,
     @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
@@ -359,6 +361,18 @@ export class QuizCodeController extends BaseController {
         preferenceDrugForm: data.preferences.drugForm,
         preferenceBudget: data.preferences.budget,
       });
+
+      // Send assessment completed notification if benfek user is associated
+      if (validation.quizCode.usedBy) {
+        const benfek = await this.prisma.user.findUnique({ where: { id: validation.quizCode.usedBy } });
+        if (benfek) {
+          await this.notificationService.sendAssessmentCompletedMessage({
+            phone: benfek.phone || undefined,
+            email: benfek.email,
+            benfekName: benfek.firstName || data.basics.nickname || 'Benfek'
+          });
+        }
+      }
 
       ResponseUtil.success(res, { quizCode: updated }, 'Quiz completed successfully');
     } catch (error: any) {

@@ -7,6 +7,7 @@ import { PaystackRepository } from '../repositories/paystack.repository';
 import { OrderRepository } from '../repositories/order.repository';
 import { SupplementRepository } from '../repositories/supplement.repository';
 import { AuthenticatedRequest } from '../types/auth.types';
+import { NotificationService } from '../services/notification.service';
 import { BaseController } from './base.controller';
 import { Container } from 'inversify';
 import {
@@ -25,7 +26,8 @@ export class PaystackController extends BaseController {
     @inject(CartService) private cartService: CartService,
     @inject(PaystackRepository) private paystackRepository: PaystackRepository,
     @inject(OrderRepository) private orderRepository: OrderRepository,
-    @inject(SupplementRepository) private supplementRepository: SupplementRepository
+    @inject(SupplementRepository) private supplementRepository: SupplementRepository,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
   }
@@ -456,6 +458,16 @@ export class PaystackController extends BaseController {
           });
         }
 
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          await this.notificationService.sendPaymentSuccessfulMessage({
+            phone: user.phone || undefined,
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+            amount: result.data.amount / 100,
+          });
+        }
+
         return res.status(200).json({
           status: true,
           message: 'Payment verified successfully',
@@ -505,6 +517,15 @@ export class PaystackController extends BaseController {
             paystackTransactionId: result.data.id ? String(result.data.id) : null,
           }),
         });
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          await this.notificationService.sendPaymentFailedMessage({
+            phone: user.phone || undefined,
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+          });
+        }
 
         return res.status(400).json({
           status: false,

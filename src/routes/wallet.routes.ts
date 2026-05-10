@@ -53,20 +53,78 @@ export const createWalletRoutes = (container: Container): Router => {
 
   /**
    * @swagger
-   * /api/v2/wallet/withdrawals:
+   * /api/v2/wallet/resolve-account:
    *   get:
    *     tags: [Wallet]
-   *     summary: Get user's withdrawals
+   *     summary: Resolve bank account details
    *     security:
    *       - BearerAuth: []
+   *     parameters:
+   *       - name: bankName
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - name: accountNumber
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
    *     responses:
    *       200:
-   *         description: List of withdrawals retrieved successfully
+   *         description: Bank account resolved successfully
    */
   router.get(
     '/withdrawals',
     authGuard.verify(),
     authenticatedHandler(walletController.getWithdrawals.bind(walletController))
+  );
+
+  /**
+   * @swagger
+   * /api/v2/wallet/banks:
+   *   get:
+   *     tags: [Wallet]
+   *     summary: Get supported banks
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Banks retrieved successfully
+   */
+  router.get(
+    '/banks',
+    authGuard.verify(),
+    authenticatedHandler(walletController.getBanks.bind(walletController))
+  );
+
+  /**
+   * @swagger
+   * /api/v2/wallet/resolve-account:
+   *   get:
+   *     tags: [Wallet]
+   *     summary: Resolve bank account details
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - name: bankName
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - name: accountNumber
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Bank account resolved successfully
+   */
+  router.get(
+    '/resolve-account',
+    authGuard.verify(),
+    authenticatedHandler(walletController.resolveBankAccount.bind(walletController))
   );
 
   /**
