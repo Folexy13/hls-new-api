@@ -13,6 +13,8 @@ type CartItemWithSupplement = {
     name: string;
     description: string;
     price: number;
+    image?: string | null;
+    imageUrl?: string | null;
     stock: number;
     userId: number;
     createdAt: Date;
@@ -51,6 +53,7 @@ export class CartRepository implements IRepository<CartWithItems> {
         SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
                s.id as 'supplement.id', s.name as 'supplement.name', 
                s.description as 'supplement.description', s.price as 'supplement.price',
+               s.imageUrl as 'supplement.imageUrl',
                s.stock as 'supplement.stock', s.userId as 'supplement.userId',
                s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
         FROM CartItem ci
@@ -71,6 +74,8 @@ export class CartRepository implements IRepository<CartWithItems> {
           name: item['supplement.name'],
           description: item['supplement.description'],
           price: item['supplement.price'],
+          image: item['supplement.imageUrl'],
+          imageUrl: item['supplement.imageUrl'],
           stock: item['supplement.stock'],
           userId: item['supplement.userId'],
           createdAt: item['supplement.createdAt'],
@@ -95,6 +100,7 @@ export class CartRepository implements IRepository<CartWithItems> {
       SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
              s.id as 'supplement.id', s.name as 'supplement.name', 
              s.description as 'supplement.description', s.price as 'supplement.price',
+             s.imageUrl as 'supplement.imageUrl',
              s.stock as 'supplement.stock', s.userId as 'supplement.userId',
              s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
       FROM CartItem ci
@@ -115,6 +121,8 @@ export class CartRepository implements IRepository<CartWithItems> {
         name: item['supplement.name'],
         description: item['supplement.description'],
         price: item['supplement.price'],
+        image: item['supplement.imageUrl'],
+        imageUrl: item['supplement.imageUrl'],
         stock: item['supplement.stock'],
         userId: item['supplement.userId'],
         createdAt: item['supplement.createdAt'],
@@ -138,6 +146,7 @@ export class CartRepository implements IRepository<CartWithItems> {
       SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
              s.id as 'supplement.id', s.name as 'supplement.name', 
              s.description as 'supplement.description', s.price as 'supplement.price',
+             s.imageUrl as 'supplement.imageUrl',
              s.stock as 'supplement.stock', s.userId as 'supplement.userId',
              s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
       FROM CartItem ci
@@ -158,6 +167,8 @@ export class CartRepository implements IRepository<CartWithItems> {
         name: item['supplement.name'],
         description: item['supplement.description'],
         price: item['supplement.price'],
+        image: item['supplement.imageUrl'],
+        imageUrl: item['supplement.imageUrl'],
         stock: item['supplement.stock'],
         userId: item['supplement.userId'],
         createdAt: item['supplement.createdAt'],
@@ -215,6 +226,7 @@ export class CartRepository implements IRepository<CartWithItems> {
       SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
              s.id as 'supplement.id', s.name as 'supplement.name', 
              s.description as 'supplement.description', s.price as 'supplement.price',
+             s.imageUrl as 'supplement.imageUrl',
              s.stock as 'supplement.stock', s.userId as 'supplement.userId',
              s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
       FROM CartItem ci
@@ -239,6 +251,8 @@ export class CartRepository implements IRepository<CartWithItems> {
         name: result[0]['supplement.name'],
         description: result[0]['supplement.description'],
         price: result[0]['supplement.price'],
+        image: result[0]['supplement.imageUrl'],
+        imageUrl: result[0]['supplement.imageUrl'],
         stock: result[0]['supplement.stock'],
         userId: result[0]['supplement.userId'],
         createdAt: result[0]['supplement.createdAt'],
@@ -257,6 +271,7 @@ export class CartRepository implements IRepository<CartWithItems> {
       SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
              s.id as 'supplement.id', s.name as 'supplement.name', 
              s.description as 'supplement.description', s.price as 'supplement.price',
+             s.imageUrl as 'supplement.imageUrl',
              s.stock as 'supplement.stock', s.userId as 'supplement.userId',
              s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
       FROM CartItem ci
@@ -281,6 +296,8 @@ export class CartRepository implements IRepository<CartWithItems> {
         name: result[0]['supplement.name'],
         description: result[0]['supplement.description'],
         price: result[0]['supplement.price'],
+        image: result[0]['supplement.imageUrl'],
+        imageUrl: result[0]['supplement.imageUrl'],
         stock: result[0]['supplement.stock'],
         userId: result[0]['supplement.userId'],
         createdAt: result[0]['supplement.createdAt'],
@@ -302,6 +319,7 @@ export class CartRepository implements IRepository<CartWithItems> {
       SELECT ci.id, ci.cartId, ci.supplementId, ci.quantity, ci.createdAt, ci.updatedAt,
              s.id as 'supplement.id', s.name as 'supplement.name', 
              s.description as 'supplement.description', s.price as 'supplement.price',
+             s.imageUrl as 'supplement.imageUrl',
              s.stock as 'supplement.stock', s.userId as 'supplement.userId',
              s.createdAt as 'supplement.createdAt', s.updatedAt as 'supplement.updatedAt'
       FROM CartItem ci
@@ -326,6 +344,8 @@ export class CartRepository implements IRepository<CartWithItems> {
         name: result[0]['supplement.name'],
         description: result[0]['supplement.description'],
         price: result[0]['supplement.price'],
+        image: result[0]['supplement.imageUrl'],
+        imageUrl: result[0]['supplement.imageUrl'],
         stock: result[0]['supplement.stock'],
         userId: result[0]['supplement.userId'],
         createdAt: result[0]['supplement.createdAt'],

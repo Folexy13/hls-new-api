@@ -7,7 +7,13 @@ interface Podcast {
   id: number;
   title: string;
   description: string;
-  audioUrl: string;
+  audioUrl: string | null;
+  host?: string | null;
+  category?: string | null;
+  duration?: string | null;
+  status?: string;
+  thumbnailUrl?: string | null;
+  tags?: unknown;
   userId: number;
   user?: {
     id: number;
@@ -24,7 +30,7 @@ export class PodcastRepository implements IRepository<Podcast> {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}  async findAll(skip?: number, take?: number): Promise<{ items: Podcast[]; total: number }> {
     // Using raw queries to avoid Prisma model type issues
     const podcasts = await this.prisma.$queryRaw`
-      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, 
+      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, p.host, p.category, p.duration, p.status, p.thumbnailUrl, p.tags,
              p.createdAt, p.updatedAt,
              u.id as 'user.id', u.firstName as 'user.firstName',
              u.lastName as 'user.lastName', u.email as 'user.email'
@@ -44,6 +50,12 @@ export class PodcastRepository implements IRepository<Podcast> {
       title: podcast.title,
       description: podcast.description,
       audioUrl: podcast.audioUrl,
+      host: podcast.host,
+      category: podcast.category,
+      duration: podcast.duration,
+      status: podcast.status,
+      thumbnailUrl: podcast.thumbnailUrl,
+      tags: podcast.tags,
       userId: podcast.userId,
       createdAt: podcast.createdAt,
       updatedAt: podcast.updatedAt,
@@ -62,7 +74,7 @@ export class PodcastRepository implements IRepository<Podcast> {
   }
   async findById(id: number): Promise<Podcast | null> {
     const podcasts = await this.prisma.$queryRaw`
-      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, 
+      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, p.host, p.category, p.duration, p.status, p.thumbnailUrl, p.tags,
              p.createdAt, p.updatedAt,
              u.id as 'user.id', u.firstName as 'user.firstName',
              u.lastName as 'user.lastName', u.email as 'user.email'
@@ -79,6 +91,12 @@ export class PodcastRepository implements IRepository<Podcast> {
       title: podcasts[0].title,
       description: podcasts[0].description,
       audioUrl: podcasts[0].audioUrl,
+      host: podcasts[0].host,
+      category: podcasts[0].category,
+      duration: podcasts[0].duration,
+      status: podcasts[0].status,
+      thumbnailUrl: podcasts[0].thumbnailUrl,
+      tags: podcasts[0].tags,
       userId: podcasts[0].userId,
       createdAt: podcasts[0].createdAt,
       updatedAt: podcasts[0].updatedAt,
@@ -92,7 +110,7 @@ export class PodcastRepository implements IRepository<Podcast> {
   }
   async findByUserId(userId: number): Promise<Podcast[]> {
     const podcasts = await this.prisma.$queryRaw`
-      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, 
+      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, p.host, p.category, p.duration, p.status, p.thumbnailUrl, p.tags,
              p.createdAt, p.updatedAt,
              u.id as 'user.id', u.firstName as 'user.firstName',
              u.lastName as 'user.lastName', u.email as 'user.email'
@@ -108,6 +126,12 @@ export class PodcastRepository implements IRepository<Podcast> {
       title: podcast.title,
       description: podcast.description,
       audioUrl: podcast.audioUrl,
+      host: podcast.host,
+      category: podcast.category,
+      duration: podcast.duration,
+      status: podcast.status,
+      thumbnailUrl: podcast.thumbnailUrl,
+      tags: podcast.tags,
       userId: podcast.userId,
       createdAt: podcast.createdAt,
       updatedAt: podcast.updatedAt,
@@ -160,7 +184,7 @@ export class PodcastRepository implements IRepository<Podcast> {
   
   async search(query: string): Promise<Podcast[]> {
     const podcasts = await this.prisma.$queryRaw`
-      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, 
+      SELECT p.id, p.title, p.description, p.audioUrl, p.userId, p.host, p.category, p.duration, p.status, p.thumbnailUrl, p.tags,
              p.createdAt, p.updatedAt,
              u.id as 'user.id', u.firstName as 'user.firstName',
              u.lastName as 'user.lastName', u.email as 'user.email'
@@ -176,6 +200,12 @@ export class PodcastRepository implements IRepository<Podcast> {
       title: podcast.title,
       description: podcast.description,
       audioUrl: podcast.audioUrl,
+      host: podcast.host,
+      category: podcast.category,
+      duration: podcast.duration,
+      status: podcast.status,
+      thumbnailUrl: podcast.thumbnailUrl,
+      tags: podcast.tags,
       userId: podcast.userId,
       createdAt: podcast.createdAt,
       updatedAt: podcast.updatedAt,

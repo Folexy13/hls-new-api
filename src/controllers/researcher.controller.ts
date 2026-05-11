@@ -77,6 +77,33 @@ export class ResearcherController {
         return ResponseUtil.error(res, 'Benfek not fully registered', 400);
       }
 
+      const linkedBenfekUser = quizCode.usedBy
+        ? await this.prisma.user.findUnique({
+            where: { id: quizCode.usedBy },
+            select: {
+              id: true,
+              email: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              whatsappNumber: true,
+              deliveryAddress: true,
+              dropOffAddress: true,
+              preferredPharmacyName: true,
+              preferredPharmacyPhone: true,
+              profileImageUrl: true,
+              profession: true,
+              currentPlaceOfWork: true,
+              workCityAddress: true,
+              role: true,
+              userId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          })
+        : null;
+
       const packs = await this.prisma.researcherPack.findMany({
         where: { quizCode: code },
         include: { items: { include: { supplement: true } } },
@@ -119,6 +146,7 @@ export class ResearcherController {
             },
           },
           principal: quizCode.creator,
+          user: linkedBenfekUser,
         },
         packs,
       }, 'Benfek code verified');

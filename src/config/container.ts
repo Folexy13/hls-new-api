@@ -33,6 +33,7 @@ import { PrincipalService } from '../services/principal.service';
 import { PrincipalController } from '../controllers/principal.controller';
 import { ResearcherController } from '../controllers/researcher.controller';
 import { BenfekController } from '../controllers/benfek.controller';
+import { ContentController } from '../controllers/content.controller';
 import { NotificationService } from '../services/notification.service';
 import { OneSignalService } from '../services/onesignal.service';
 import { EmailService } from '../services/email.service';
@@ -89,5 +90,6 @@ container.bind<QuizCodeController>(QuizCodeController).toSelf();
 container.bind<PrincipalController>(PrincipalController).toSelf();
 container.bind<ResearcherController>(ResearcherController).toSelf();
 container.bind<BenfekController>(BenfekController).toSelf();
+container.bind<ContentController>(ContentController).toSelf();
 
 export { container };

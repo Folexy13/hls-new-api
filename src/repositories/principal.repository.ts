@@ -18,8 +18,12 @@ export class PrincipalRepository {
     profileImageUrl?: string;
     profession?: string;
     currentPlaceOfWork?: string;
+    workCityAddress?: string;
     licenseNumber?: string;
     yearsOfExperience?: string;
+    referPharmacy?: boolean;
+    referredPharmacyName?: string | null;
+    referredPharmacyPhone?: string | null;
     preferredPaymentMethod?: string;
     bankName?: string;
     accountNumber?: string;
@@ -36,13 +40,22 @@ export class PrincipalRepository {
         profileImageUrl: data.profileImageUrl,
         profession: data.profession,
         currentPlaceOfWork: data.currentPlaceOfWork,
+        workCityAddress: data.workCityAddress,
         licenseNumber: data.licenseNumber,
         yearsOfExperience: data.yearsOfExperience,
+        referPharmacy: data.referPharmacy ?? false,
+        referredPharmacyName: data.referredPharmacyName,
+        referredPharmacyPhone: data.referredPharmacyPhone,
         preferredPaymentMethod: data.preferredPaymentMethod,
         bankName: data.bankName,
         accountNumber: data.accountNumber,
         accountName: data.accountName,
         role: 'principal',
+        wallet: {
+          create: {
+            balance: 0,
+          },
+        },
       },
     });
   }
@@ -97,8 +110,12 @@ export class PrincipalRepository {
       profileImageUrl: string;
       profession: string;
       currentPlaceOfWork: string;
+      workCityAddress: string;
       licenseNumber: string;
       yearsOfExperience: string;
+      referPharmacy: boolean;
+      referredPharmacyName: string | null;
+      referredPharmacyPhone: string | null;
       preferredPaymentMethod: string;
       bankName: string;
       accountNumber: string;

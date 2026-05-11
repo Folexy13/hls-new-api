@@ -1,6 +1,7 @@
 import { injectable, inject } from "inversify";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { PrismaClient } from "@prisma/client";
 import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
 import { ConflictError, UnauthorizedError, NotFoundError } from "../utilities/errors";
@@ -8,23 +9,27 @@ import { config } from "../config/config";
 import { NotificationService } from "../services/notification.service";
 import { EmailService } from "./email.service";
 import crypto from "crypto";
+import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 
 @injectable()
 export class AuthService {
   constructor(
     @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
     @inject(EmailService) private emailService: EmailService
   ) {}
 
   async register(data: RegisterUserDTO) {
-    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.authRepository.findUserByEmail(email);
     if (existingUser) {
       throw new ConflictError("Email address is already registered.");
     }
 
-    if (data.phone) {
-      const existingPhone = await this.authRepository.findUserByPhone(data.phone);
+    if (phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(phone);
       if (existingPhone) {
         throw new ConflictError("Phone number is already registered.");
       }
@@ -33,6 +38,8 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
       ...data,
+      email,
+      phone: phone || undefined,
       password: hashedPassword,
     });
 
@@ -40,7 +47,7 @@ export class AuthService {
   }
 
   async login(data: LoginUserDTO) {
-    const user = await this.authRepository.findUserByEmail(data.email);
+    const user = await this.authRepository.findUserByEmail(normalizeEmail(data.email));
     if (!user) {
       throw new UnauthorizedError("Invalid email or password.");
     }
@@ -91,7 +98,8 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.authRepository.findUserByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.authRepository.findUserByEmail(normalizedEmail);
     if (!user) {
       throw new NotFoundError("User with this email does not exist.");
     }
@@ -108,7 +116,7 @@ export class AuthService {
     );
     
     // Send email using EmailService
-    await this.emailService.sendMagicLink(email, resetToken);
+    await this.emailService.sendMagicLink(normalizedEmail, resetToken);
   }
 
   async resetPassword(token: string, newPassword?: string) {
@@ -142,7 +150,8 @@ export class AuthService {
   }
 
   async registerBenfek(data: RegisterBenfekDTO) {
-    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const existingUser = await this.authRepository.findUserByEmail(email);
     if (existingUser) {
       throw new ConflictError("Email address is already registered.");
     }
@@ -154,7 +163,7 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
-      email: data.email,
+      email,
       username: data.username,
       password: hashedPassword,
       firstName: data.username,
@@ -166,13 +175,15 @@ export class AuthService {
   }
 
   async registerUnreferredBenfek(data: RegisterUnreferredBenfekDTO) {
-    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.authRepository.findUserByEmail(email);
     if (existingUser) {
       throw new ConflictError("Email address is already registered.");
     }
 
-    if (data.phone) {
-      const existingPhone = await this.authRepository.findUserByPhone(data.phone);
+    if (phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(phone);
       if (existingPhone) {
         throw new ConflictError("Phone number is already registered.");
       }
@@ -180,14 +191,28 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
-      email: data.email,
-      username: data.email,
+      email,
+      username: email,
       password: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
-      phone: data.phone,
+      phone: phone || undefined,
       role: "benfek"
     });
+
+    if (data.quizCode) {
+      await this.prisma.quizCode.updateMany({
+        where: {
+          code: data.quizCode,
+          isUsed: true,
+          OR: [{ usedBy: null }, { usedBy: user.id }],
+        },
+        data: {
+          usedBy: user.id,
+          usedAt: new Date(),
+        },
+      });
+    }
 
     return this.createAuthResponse(user);
   }

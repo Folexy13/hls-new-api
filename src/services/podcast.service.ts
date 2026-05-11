@@ -1,9 +1,10 @@
 import { injectable, inject } from 'inversify';
 import { CreatePodcastDTO, UpdatePodcastDTO } from '../DTOs/podcast.dto';
-import type { Podcast } from '@prisma/client';
 import { AppError } from '../utilities/errors';
 import { PodcastRepository } from '../repositories/podcast.repository';
 import { S3Service } from '../utilities/s3.utility';
+
+type Podcast = any;
 
 @injectable()
 export class PodcastService {
@@ -70,7 +71,7 @@ export class PodcastService {
     }
 
     // Extract the key from the audioUrl
-    const key = podcast.audioUrl.split('/').pop();
+    const key = podcast.audioUrl?.split('/').pop();
     if (key) {
       // Delete file from S3
       await this.s3Service.deleteFile(`podcasts/${key}`);
@@ -88,7 +89,7 @@ export class PodcastService {
     }
 
     // Extract the key from the audioUrl
-    const key = podcast.audioUrl.split('/').pop();
+    const key = podcast.audioUrl?.split('/').pop();
     if (!key) {
       throw new AppError('Invalid audio URL', 500);
     }

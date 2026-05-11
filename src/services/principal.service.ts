@@ -6,6 +6,7 @@ import { WalletRepository } from '../repositories/wallet.repository';
 import { WithdrawalRepository } from '../repositories/withdrawal.repository';
 import { QuizCodeRepository } from '../repositories/quizcode.repository';
 import { CreateBenfekRecordDTO, CreateBenfekUserDTO, CreatePrincipalUserDTO, UpdatePrincipalUserDTO } from '../DTOs/principal.dto';
+import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
 @injectable()
 export class PrincipalService {
@@ -34,23 +35,35 @@ export class PrincipalService {
   }
 
   async createPrincipal(data: CreatePrincipalUserDTO) {
-    const existingUser = await this.principalRepository.findByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.principalRepository.findByEmail(email);
     if (existingUser) {
       throw new Error('User already exists');
+    }
+    if (phone) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: { phone: { in: getPhoneSearchVariants(phone) } },
+      });
+      if (existingPhone) throw new Error('Phone number already exists');
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.principalRepository.createPrincipal({
-      email: data.email,
+      email,
       password: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
-      phone: data.phone,
+      phone,
       profileImageUrl: data.profileImageUrl,
       profession: data.profession,
       currentPlaceOfWork: data.currentPlaceOfWork,
+      workCityAddress: data.workCityAddress,
       licenseNumber: data.licenseNumber,
       yearsOfExperience: data.yearsOfExperience,
+      referPharmacy: data.referPharmacy ?? false,
+      referredPharmacyName: data.referPharmacy ? data.referredPharmacyName : null,
+      referredPharmacyPhone: data.referPharmacy ? data.referredPharmacyPhone : null,
       preferredPaymentMethod: data.preferredPaymentMethod,
       bankName: data.bankName,
       accountNumber: data.accountNumber,
@@ -62,18 +75,26 @@ export class PrincipalService {
   }
 
   async createBenfek(data: CreateBenfekUserDTO) {
-    const existingUser = await this.principalRepository.findByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.principalRepository.findByEmail(email);
     if (existingUser) {
       throw new Error('User already exists');
+    }
+    if (phone) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: { phone: { in: getPhoneSearchVariants(phone) } },
+      });
+      if (existingPhone) throw new Error('Phone number already exists');
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.principalRepository.createBenfek({
-      email: data.email,
+      email,
       password: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
-      phone: data.phone,
+      phone,
     });
 
     const { password, ...userWithoutPassword } = user;
@@ -105,6 +126,25 @@ export class PrincipalService {
       throw new Error('Principal not found');
     }
 
+    const email = data.email ? normalizeEmail(data.email) : undefined;
+    const phone = data.phone ? normalizePhone(data.phone) : undefined;
+
+    if (email && email !== principal.email) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email, id: { not: id } },
+        select: { id: true },
+      });
+      if (existingEmail) throw new Error('Email address is already registered.');
+    }
+
+    if (phone && phone !== principal.phone) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: { id: { not: id }, phone: { in: getPhoneSearchVariants(phone) } },
+        select: { id: true },
+      });
+      if (existingPhone) throw new Error('Phone number is already registered.');
+    }
+
     const updateData: Partial<{
       email: string;
       password: string;
@@ -114,22 +154,30 @@ export class PrincipalService {
       profileImageUrl: string;
       profession: string;
       currentPlaceOfWork: string;
+      workCityAddress: string;
       licenseNumber: string;
       yearsOfExperience: string;
+      referPharmacy: boolean;
+      referredPharmacyName: string | null;
+      referredPharmacyPhone: string | null;
       preferredPaymentMethod: string;
       bankName: string;
       accountNumber: string;
       accountName: string;
     }> = {
-      email: data.email,
+      email,
       firstName: data.firstName,
       lastName: data.lastName,
-      phone: data.phone,
+      phone,
       profileImageUrl: data.profileImageUrl,
       profession: data.profession,
       currentPlaceOfWork: data.currentPlaceOfWork,
+      workCityAddress: data.workCityAddress,
       licenseNumber: data.licenseNumber,
       yearsOfExperience: data.yearsOfExperience,
+      referPharmacy: data.referPharmacy,
+      referredPharmacyName: data.referPharmacy === false ? null : data.referredPharmacyName,
+      referredPharmacyPhone: data.referPharmacy === false ? null : data.referredPharmacyPhone,
       preferredPaymentMethod: data.preferredPaymentMethod,
       bankName: data.bankName,
       accountNumber: data.accountNumber,
@@ -233,6 +281,7 @@ export class PrincipalService {
         select: {
           profession: true,
           currentPlaceOfWork: true,
+          workCityAddress: true,
           licenseNumber: true,
           yearsOfExperience: true,
           bankName: true,
@@ -300,6 +349,7 @@ export class PrincipalService {
     const missingProfileFields = [
       ['Profession', principal?.profession],
       ['Current place of work', principal?.currentPlaceOfWork],
+      ['Work city address', principal?.workCityAddress],
       ['License number', principal?.licenseNumber],
       ['Years of experience', principal?.yearsOfExperience],
       ['Preferred payment method', principal?.preferredPaymentMethod],

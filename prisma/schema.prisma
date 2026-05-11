@@ -43,9 +43,13 @@ model User {
   dropOffAddress String?       @db.Text
   preferredPharmacyName String? @db.Text
   preferredPharmacyPhone String? @db.Text
+  referPharmacy Boolean        @default(false)
+  referredPharmacyName String? @db.Text
+  referredPharmacyPhone String? @db.Text
   profileImageUrl String?      @db.Text
   profession String?           @db.Text
   currentPlaceOfWork String?   @db.Text
+  workCityAddress String?      @db.Text
   licenseNumber String?        @db.Text
   yearsOfExperience String?    @db.Text
   preferredPaymentMethod String? @db.Text
@@ -57,6 +61,7 @@ model User {
   refreshTokens RefreshToken[]
   userId        String?        @unique
   podcasts      Podcast[]
+  articles      Article[]
   supplements   Supplement[]
   researcherPacks ResearcherPack[]
   operationalPaymentsMade OperationalPayment[] @relation("OperationalPaymentMaker")
@@ -115,7 +120,30 @@ model Podcast {
   id          Int      @id @default(autoincrement())
   title       String
   description String
-  audioUrl    String
+  audioUrl    String?  @db.Text
+  host        String?
+  category    String?
+  duration    String?
+  status      String   @default("draft")
+  thumbnailUrl String? @db.Text
+  tags        Json?
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  content     String   @db.LongText
+  category    String
+  status      String   @default("draft") // draft, published, archived
+  excerpt     String?  @db.Text
+  imageUrl    String?  @db.Text
+  readTime    String?
+  tags        Json?
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())

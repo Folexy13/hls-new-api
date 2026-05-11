@@ -1,0 +1,29 @@
+CREATE TABLE IF NOT EXISTS `Article` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `title` VARCHAR(191) NOT NULL,
+  `description` TEXT NOT NULL,
+  `content` LONGTEXT NOT NULL,
+  `category` VARCHAR(191) NOT NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'draft',
+  `excerpt` TEXT NULL,
+  `imageUrl` TEXT NULL,
+  `readTime` VARCHAR(191) NULL,
+  `tags` JSON NULL,
+  `userId` INTEGER NOT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE `Article`
+  ADD CONSTRAINT `Article_userId_fkey`
+  FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `Podcast`
+  ADD COLUMN `host` VARCHAR(191) NULL,
+  ADD COLUMN `category` VARCHAR(191) NULL,
+  ADD COLUMN `duration` VARCHAR(191) NULL,
+  ADD COLUMN `status` VARCHAR(191) NOT NULL DEFAULT 'draft',
+  ADD COLUMN `thumbnailUrl` TEXT NULL,
+  ADD COLUMN `tags` JSON NULL,
+  MODIFY COLUMN `audioUrl` TEXT NULL;

@@ -341,23 +341,29 @@ export class WalletController extends BaseController {
    */
   async resolveBankAccount(req: AuthenticatedRequest, res: Response) {
     try {
-      const { bankName, accountNumber } = req.query;
+      const { bankName, bankCode, accountNumber } = req.query;
 
-      if (!bankName || !accountNumber) {
-        return ResponseUtil.error(res, 'bankName and accountNumber are required query parameters', 400);
+      if ((!bankName && !bankCode) || !accountNumber) {
+        return ResponseUtil.error(res, 'Please select a bank and enter a valid account number.', 400);
       }
 
       const accountName = await PaystackService.resolveAccountNumber(
-        String(bankName),
-        String(accountNumber)
+        String(bankName || ''),
+        String(accountNumber),
+        bankCode ? String(bankCode) : undefined
       );
 
       return ResponseUtil.success(res, { accountName });
     } catch (error: any) {
+      const upstreamStatus = error?.response?.status;
+      const message = upstreamStatus === 429
+        ? 'Account name lookup is temporarily busy. Please wait a moment and try again.'
+        : 'We could not confirm the account name. Please check the bank and account number, then try again.';
+
       return ResponseUtil.error(
         res,
-        error?.response?.data?.message || error?.message || 'Failed to resolve bank account',
-        error?.response?.status === 422 ? 404 : 400
+        message,
+        upstreamStatus === 429 ? 429 : upstreamStatus === 422 ? 404 : 400
       );
     }
   }
