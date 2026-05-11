@@ -1,6 +1,7 @@
 import { injectable, inject } from "inversify";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { PrismaClient } from "@prisma/client";
 import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
 import { ConflictError, UnauthorizedError, NotFoundError } from "../utilities/errors";
@@ -14,6 +15,7 @@ import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.
 export class AuthService {
   constructor(
     @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
     @inject(EmailService) private emailService: EmailService
   ) {}
@@ -197,6 +199,20 @@ export class AuthService {
       phone: phone || undefined,
       role: "benfek"
     });
+
+    if (data.quizCode) {
+      await this.prisma.quizCode.updateMany({
+        where: {
+          code: data.quizCode,
+          isUsed: true,
+          OR: [{ usedBy: null }, { usedBy: user.id }],
+        },
+        data: {
+          usedBy: user.id,
+          usedAt: new Date(),
+        },
+      });
+    }
 
     return this.createAuthResponse(user);
   }
