@@ -3,6 +3,7 @@ import { PrismaClient, User } from '@prisma/client';
 import { injectable, inject } from 'inversify';
 import { RegisterUserDTO } from '../DTOs/auth.dto';
 import { AuthRepository } from './Abstractions/authrepo';
+import { getPhoneSearchVariants } from '../utilities/contact-normalizer.utility';
 
 @injectable()
 export default class AuthRepositoryImpl implements AuthRepository {
@@ -58,8 +59,12 @@ export default class AuthRepositoryImpl implements AuthRepository {
   }
 
   async findUserByPhone(phone: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { phone }
+    return this.prisma.user.findFirst({
+      where: {
+        phone: {
+          in: getPhoneSearchVariants(phone),
+        },
+      },
     });
   }
 

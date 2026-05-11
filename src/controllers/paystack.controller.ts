@@ -17,6 +17,7 @@ import {
   PaystackPackCheckoutSchema,
 } from '../DTOs/paystack.dto';
 import { computePrincipalCredit } from '../utilities/principal-credit.utility';
+import { ResponseUtil } from '../utilities/response.utility';
  
 @injectable()
 export class PaystackController extends BaseController {
@@ -191,7 +192,7 @@ export class PaystackController extends BaseController {
       const result = await PaystackService.initializeTransaction(data);
       return res.status(200).json(result);
     } catch (error: any) {
-      return res.status(400).json({ message: error?.message || 'Invalid payload.' });
+      return ResponseUtil.error(res, 'Please check your payment details and try again.', 400, error);
     }
   };
 
@@ -251,6 +252,22 @@ export class PaystackController extends BaseController {
         email, 
         amount: Math.round(total * 100), // Convert to kobo
         metadata,
+        callbackUrl,
+      });
+
+      await this.paystackRepository.upsertPaymentByOrderId({
+        userId,
+        orderId: order.id,
+        amount: total,
+        method: 'paystack',
+        status: 'pending',
+        paystackReference: result?.data?.reference,
+        currency: 'NGN',
+        metadata: JSON.stringify({
+          ...metadata,
+          checkoutInitializedAt: new Date().toISOString(),
+          paystackReference: result?.data?.reference || null,
+        }),
       });
 
       return res.status(200).json({
@@ -260,7 +277,7 @@ export class PaystackController extends BaseController {
       });
     } catch (error: any) {
       console.error('Checkout error:', error);
-      return res.status(500).json({ message: error?.response?.data?.message || 'Paystack checkout failed.' });
+      return ResponseUtil.error(res, 'Unable to start checkout right now. Please try again shortly.', 500, error);
     }
   };
 
@@ -355,6 +372,21 @@ export class PaystackController extends BaseController {
         callbackUrl: data.callbackUrl,
       });
 
+      await this.paystackRepository.upsertPaymentByOrderId({
+        userId,
+        orderId: order.id,
+        amount: total,
+        method: 'paystack',
+        status: 'pending',
+        paystackReference: result?.data?.reference,
+        currency: 'NGN',
+        metadata: JSON.stringify({
+          ...metadata,
+          checkoutInitializedAt: new Date().toISOString(),
+          paystackReference: result?.data?.reference || null,
+        }),
+      });
+
       return res.status(200).json({
         ...result,
         orderId: order.id,
@@ -364,7 +396,7 @@ export class PaystackController extends BaseController {
       });
     } catch (error: any) {
       console.error('Pack checkout error:', error);
-      return res.status(500).json({ message: error?.response?.data?.message || error?.message || 'Pack checkout failed.' });
+      return ResponseUtil.error(res, 'Unable to start pack checkout right now. Please try again shortly.', 500, error);
     }
   };
 
@@ -406,7 +438,7 @@ export class PaystackController extends BaseController {
 
       if (result.data.status === 'success') {
         if (!orderId) {
-          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
+          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
         }
 
         await this.orderRepository.updateStatus(orderId, 'paid');
@@ -486,7 +518,7 @@ export class PaystackController extends BaseController {
         });
       } else {
         if (!orderId) {
-          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
+          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
         }
 
         await this.orderRepository.updateStatus(orderId, 'failed');
@@ -539,7 +571,7 @@ export class PaystackController extends BaseController {
       }
     } catch (error: any) {
       console.error('Verification error:', error);
-      return res.status(500).json({ message: error?.response?.data?.message || 'Paystack verification failed.' });
+      return ResponseUtil.error(res, 'Unable to verify payment right now. Please try again shortly.', 500, error);
     }
   };
 }

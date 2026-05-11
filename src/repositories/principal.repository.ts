@@ -18,6 +18,7 @@ export class PrincipalRepository {
     profileImageUrl?: string;
     profession?: string;
     currentPlaceOfWork?: string;
+    workCityAddress?: string;
     licenseNumber?: string;
     yearsOfExperience?: string;
     preferredPaymentMethod?: string;
@@ -36,6 +37,7 @@ export class PrincipalRepository {
         profileImageUrl: data.profileImageUrl,
         profession: data.profession,
         currentPlaceOfWork: data.currentPlaceOfWork,
+        workCityAddress: data.workCityAddress,
         licenseNumber: data.licenseNumber,
         yearsOfExperience: data.yearsOfExperience,
         preferredPaymentMethod: data.preferredPaymentMethod,
@@ -97,6 +99,7 @@ export class PrincipalRepository {
       profileImageUrl: string;
       profession: string;
       currentPlaceOfWork: string;
+      workCityAddress: string;
       licenseNumber: string;
       yearsOfExperience: string;
       preferredPaymentMethod: string;

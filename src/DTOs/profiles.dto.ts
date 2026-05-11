@@ -26,6 +26,7 @@ const PrincipalExtrasSchema = z.object({
   profileImageUrl: optionalUrlString,
   profession: optionalTrimmedString,
   currentPlaceOfWork: optionalTrimmedString,
+  workCityAddress: optionalTrimmedString,
   licenseNumber: optionalTrimmedString,
   yearsOfExperience: optionalTrimmedString,
   preferredPaymentMethod: optionalTrimmedString,

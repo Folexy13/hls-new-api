@@ -64,8 +64,14 @@ app.use("/doc", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Routes
 import { logRoutes } from './utilities/routeLogger';
+import { ResponseUtil } from './utilities/response.utility';
 const apiRouter = createRoutes(container);
 app.use("/api/v2", apiRouter);
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+  return ResponseUtil.error(res, err?.message || 'Operation failed', statusCode, err);
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

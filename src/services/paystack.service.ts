@@ -129,28 +129,47 @@ export class PaystackService {
     const match = banks.find((bank: any) => String(bank?.name || '').trim().toLowerCase() === normalizedName);
 
     if (!match?.code) {
-      throw new Error(`Unable to resolve bank code for ${bankName}`);
+      throw new Error('We could not find the selected bank. Please choose the correct bank from the list and try again.');
     }
 
     return String(match.code);
   }
 
-  static async resolveAccountNumber(bankName: string, accountNumber: string) {
-    const bankCode = await this.resolveBankCode(bankName);
-    
-    const response = await axios.get(
-      `${PAYSTACK_BASE_URL}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
-      {
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        },
+  static async resolveAccountNumber(bankName: string, accountNumber: string, bankCode?: string) {
+    const resolvedBankCode = bankCode?.trim() || (await this.resolveBankCode(bankName));
+
+    try {
+      const response = await axios.get(
+        `${PAYSTACK_BASE_URL}/bank/resolve?account_number=${accountNumber}&bank_code=${resolvedBankCode}`,
+        {
+          headers: {
+            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          },
+        }
+      );
+
+      if (!response.data?.data?.account_name) {
+        console.error('[Paystack account resolve] Missing account name in response', {
+          bankName,
+          bankCode: resolvedBankCode,
+          accountNumber,
+          paystackResponse: response.data,
+        });
+        throw new Error('We could not confirm the account name. Please check the bank and account number, then try again.');
       }
-    );
 
-    if (!response.data?.data?.account_name) {
-      throw new Error('Could not resolve account name');
+      return response.data.data.account_name;
+    } catch (error: any) {
+      console.error('[Paystack account resolve] Backend lookup failed', {
+        bankName,
+        bankCode: resolvedBankCode,
+        accountNumber,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        paystackResponse: error?.response?.data,
+        message: error?.message,
+      });
+      throw error;
     }
-
-    return response.data.data.account_name;
   }
 }

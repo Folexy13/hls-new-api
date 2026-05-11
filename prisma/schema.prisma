@@ -46,6 +46,7 @@ model User {
   profileImageUrl String?      @db.Text
   profession String?           @db.Text
   currentPlaceOfWork String?   @db.Text
+  workCityAddress String?      @db.Text
   licenseNumber String?        @db.Text
   yearsOfExperience String?    @db.Text
   preferredPaymentMethod String? @db.Text
@@ -122,7 +123,18 @@ model Podcast {
   updatedAt   DateTime @updatedAt
 }
 
-model Supplement {
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  content     String   @db.LongText
+  category    String
+  status      String   @default("draft") // draft, published, archived
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
   id          Int         @id @default(autoincrement())
   name        String
   description String

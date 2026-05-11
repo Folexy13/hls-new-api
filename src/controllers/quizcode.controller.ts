@@ -8,6 +8,7 @@ import { Container } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
 import { formatHealthField } from '../utilities/health-field.utility';
+import { AppError } from '../utilities/errors';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -103,6 +104,10 @@ export class QuizCodeController extends BaseController {
     } catch (error: any) {
       if (error.name === 'ZodError') {
         ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      if (error instanceof AppError) {
+        ResponseUtil.error(res, error.message, error.statusCode, error);
         return;
       }
       ResponseUtil.error(res, 'Failed to create quiz code', 500, error);
@@ -639,19 +644,103 @@ export class QuizCodeController extends BaseController {
   deleteQuizCode: RequestHandler = async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
-      
+
       if (user.role !== 'principal') {
         ResponseUtil.error(res, 'Only principals can delete quiz codes', 403);
         return;
       }
 
       const id = parseInt(req.params.id as any);
-      
+
       await this.quizCodeRepository.delete(id);
 
       ResponseUtil.success(res, null, 'Quiz code deleted successfully');
     } catch (error: any) {
       ResponseUtil.error(res, 'Failed to delete quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/{id}:
+   *   put:
+   *     summary: Update a benfek's health details (Principal only)
+   *     tags: [QuizCode]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               allergies:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               scares:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               familyCondition:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               medications:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               currentConditions:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               hasCurrentCondition:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Benfek health details updated successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: Quiz code not found
+   */
+  updateBenfekHealthDetails: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can update benfek details', 403);
+        return;
+      }
+
+      const id = parseInt(req.params.id as any);
+      const { allergies, scares, familyCondition, medications, currentConditions, hasCurrentCondition } = req.body;
+
+      const updated = await this.quizCodeRepository.updateBenfekHealthDetails(id, {
+        allergies,
+        scares,
+        familyCondition,
+        medications,
+        currentConditions,
+        hasCurrentCondition,
+      });
+
+      ResponseUtil.success(res, updated, 'Benfek health details updated successfully');
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        ResponseUtil.error(res, 'Quiz code not found', 404);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to update benfek details', 500, error);
     }
   };
 }

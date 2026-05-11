@@ -13,6 +13,7 @@ import {
 import { NotificationService } from '../services/notification.service';
 import { z } from 'zod';
 import { formatHealthField } from '../utilities/health-field.utility';
+import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
 @injectable()
 export class BenfekController {
@@ -544,6 +545,30 @@ export class BenfekController {
         if (field in data) {
           userData[field] = data[field];
         }
+      }
+
+      if (typeof data.email === 'string') {
+        const email = normalizeEmail(data.email);
+        const existingEmail = await this.prisma.user.findFirst({
+          where: { email, id: { not: userId } },
+          select: { id: true },
+        });
+        if (existingEmail) {
+          return ResponseUtil.error(res, 'Email address is already registered.', 409);
+        }
+        userData.email = email;
+      }
+
+      if (typeof data.phone === 'string') {
+        const phone = normalizePhone(data.phone);
+        const existingPhone = await this.prisma.user.findFirst({
+          where: { id: { not: userId }, phone: { in: getPhoneSearchVariants(phone) } },
+          select: { id: true },
+        });
+        if (existingPhone) {
+          return ResponseUtil.error(res, 'Phone number is already registered.', 409);
+        }
+        userData.phone = phone;
       }
 
       if (Object.keys(userData).length > 0) {
