@@ -360,6 +360,7 @@ export class ResearcherController {
               packId: pack.id,
               supplementId: item.id,
               quantity: item.quantity,
+              rationale: item.rationale || null,
               selectedWholesalerName: item.selectedWholesalerName || null,
               selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
               selectedWholesalerContact: item.selectedWholesalerContact || null,
@@ -378,6 +379,7 @@ export class ResearcherController {
             } as any,
             update: {
               quantity: item.quantity,
+              rationale: item.rationale || null,
               selectedWholesalerName: item.selectedWholesalerName || null,
               selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
               selectedWholesalerContact: item.selectedWholesalerContact || null,
