@@ -349,16 +349,16 @@ export class QuizCodeController extends BaseController {
   completeBenfekQuiz: RequestHandler = async (req: Request, res: Response) => {
     try {
       const data = CompleteBenfekQuizSchema.parse(req.body);
-      const validation = await this.quizCodeRepository.validateCode(data.code.toUpperCase());
-      if (!validation.valid || !validation.quizCode) {
-        ResponseUtil.error(res, validation.message, 400);
+      const quizCode = await this.quizCodeRepository.findByCode(data.code.toUpperCase());
+      if (!quizCode) {
+        ResponseUtil.error(res, 'Quiz code not found', 400);
         return;
       }
 
       const updated = await this.quizCodeRepository.completeBenfekQuiz(data.code.toUpperCase(), {
         basicNickname: data.basics.nickname,
-        basicWeight: data.basics.weight || validation.quizCode.basicWeight || undefined,
-        basicHeight: data.basics.height || validation.quizCode.basicHeight || undefined,
+        basicWeight: data.basics.weight || quizCode.basicWeight || undefined,
+        basicHeight: data.basics.height || quizCode.basicHeight || undefined,
         lifestyleHabits: data.lifestyle.habits,
         lifestyleFun: data.lifestyle.funActivities,
         lifestyleDesires: data.lifestyle.desires,
@@ -368,8 +368,8 @@ export class QuizCodeController extends BaseController {
       });
 
       // Send assessment completed notification if benfek user is associated
-      if (validation.quizCode.usedBy) {
-        const benfek = await this.prisma.user.findUnique({ where: { id: validation.quizCode.usedBy } });
+      if (quizCode.usedBy) {
+        const benfek = await this.prisma.user.findUnique({ where: { id: quizCode.usedBy } });
         if (benfek) {
           await this.notificationService.sendAssessmentCompletedMessage({
             phone: benfek.phone || undefined,

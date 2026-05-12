@@ -198,7 +198,6 @@ export class QuizCodeRepository {
         preferenceBudget: data.preferenceBudget,
         isUsed: true,
         usedAt: new Date(),
-        usedBy: null,
       },
     });
   }

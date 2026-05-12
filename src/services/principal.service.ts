@@ -61,6 +61,9 @@ export class PrincipalService {
       workCityAddress: data.workCityAddress,
       licenseNumber: data.licenseNumber,
       yearsOfExperience: data.yearsOfExperience,
+      referPharmacy: data.referPharmacy ?? false,
+      referredPharmacyName: data.referPharmacy ? data.referredPharmacyName : null,
+      referredPharmacyPhone: data.referPharmacy ? data.referredPharmacyPhone : null,
       preferredPaymentMethod: data.preferredPaymentMethod,
       bankName: data.bankName,
       accountNumber: data.accountNumber,
@@ -154,6 +157,9 @@ export class PrincipalService {
       workCityAddress: string;
       licenseNumber: string;
       yearsOfExperience: string;
+      referPharmacy: boolean;
+      referredPharmacyName: string | null;
+      referredPharmacyPhone: string | null;
       preferredPaymentMethod: string;
       bankName: string;
       accountNumber: string;
@@ -169,6 +175,9 @@ export class PrincipalService {
       workCityAddress: data.workCityAddress,
       licenseNumber: data.licenseNumber,
       yearsOfExperience: data.yearsOfExperience,
+      referPharmacy: data.referPharmacy,
+      referredPharmacyName: data.referPharmacy === false ? null : data.referredPharmacyName,
+      referredPharmacyPhone: data.referPharmacy === false ? null : data.referredPharmacyPhone,
       preferredPaymentMethod: data.preferredPaymentMethod,
       bankName: data.bankName,
       accountNumber: data.accountNumber,

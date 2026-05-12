@@ -43,6 +43,9 @@ model User {
   dropOffAddress String?       @db.Text
   preferredPharmacyName String? @db.Text
   preferredPharmacyPhone String? @db.Text
+  referPharmacy Boolean        @default(false)
+  referredPharmacyName String? @db.Text
+  referredPharmacyPhone String? @db.Text
   profileImageUrl String?      @db.Text
   profession String?           @db.Text
   currentPlaceOfWork String?   @db.Text

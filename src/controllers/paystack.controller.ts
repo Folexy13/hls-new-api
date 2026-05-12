@@ -50,14 +50,28 @@ export class PaystackController extends BaseController {
       return;
     }
 
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { userId: quizCodeRecord.createdBy },
-      select: { id: true, balance: true },
+    const existingCredit = await this.prisma.principalCredit.findFirst({
+      where: {
+        paymentId: params.paymentId,
+        quizCode: params.quizCode,
+        packId: params.packId,
+      },
+      select: { id: true },
     });
 
-    if (!wallet?.id) {
+    if (existingCredit) {
       return;
     }
+
+    const wallet = await this.prisma.wallet.upsert({
+      where: { userId: quizCodeRecord.createdBy },
+      update: {},
+      create: {
+        userId: quizCodeRecord.createdBy,
+        balance: 0,
+      },
+      select: { id: true, balance: true },
+    });
 
     const packRows = await this.prisma.$queryRawUnsafe<any[]>(
       `SELECT rpi.id,
