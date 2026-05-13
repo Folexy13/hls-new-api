@@ -15,6 +15,46 @@ import { z } from 'zod';
 import { formatHealthField } from '../utilities/health-field.utility';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
+const HLS_PHARMACY_NAME = 'HLS Pharmacy';
+
+const resolveDefaultPharmacyFromPrincipal = (principal?: {
+  profession?: string | null;
+  currentPlaceOfWork?: string | null;
+  phone?: string | null;
+  whatsappNumber?: string | null;
+  referPharmacy?: boolean | null;
+  referredPharmacyName?: string | null;
+  referredPharmacyPhone?: string | null;
+}) => {
+  const profession = principal?.profession?.trim().toLowerCase() || '';
+
+  if (profession === 'hls ap') {
+    return {
+      preferredPharmacyName: HLS_PHARMACY_NAME,
+      preferredPharmacyPhone: null,
+    };
+  }
+
+  if (profession === 'pharmacist' && principal?.currentPlaceOfWork?.trim()) {
+    return {
+      preferredPharmacyName: principal.currentPlaceOfWork.trim(),
+      preferredPharmacyPhone: principal.phone?.trim() || principal.whatsappNumber?.trim() || null,
+    };
+  }
+
+  if (profession !== 'pharmacist' && principal?.referPharmacy && principal.referredPharmacyName?.trim()) {
+    return {
+      preferredPharmacyName: principal.referredPharmacyName.trim(),
+      preferredPharmacyPhone: principal.referredPharmacyPhone?.trim() || null,
+    };
+  }
+
+  return {
+    preferredPharmacyName: null,
+    preferredPharmacyPhone: null,
+  };
+};
+
 @injectable()
 export class BenfekController {
   constructor(
@@ -75,27 +115,26 @@ export class BenfekController {
             whatsappNumber: true,
             profession: true,
             currentPlaceOfWork: true,
+            referPharmacy: true,
+            referredPharmacyName: true,
+            referredPharmacyPhone: true,
           },
         },
       },
     });
 
     let resolvedUser = user;
-    const principalProfession = quizCode?.creator?.profession?.trim().toLowerCase();
-    const principalPharmacyName = quizCode?.creator?.currentPlaceOfWork?.trim();
-    const principalPharmacyPhone =
-      quizCode?.creator?.phone?.trim() || quizCode?.creator?.whatsappNumber?.trim() || undefined;
+    const defaultPharmacy = resolveDefaultPharmacyFromPrincipal(quizCode?.creator);
 
     if (
       !resolvedUser.preferredPharmacyName?.trim() &&
-      principalProfession === 'pharmacy' &&
-      principalPharmacyName
+      defaultPharmacy.preferredPharmacyName
     ) {
       resolvedUser = await this.prisma.user.update({
         where: { id: userId },
         data: {
-          preferredPharmacyName: principalPharmacyName,
-          preferredPharmacyPhone: resolvedUser.preferredPharmacyPhone?.trim() || principalPharmacyPhone,
+          preferredPharmacyName: defaultPharmacy.preferredPharmacyName,
+          preferredPharmacyPhone: resolvedUser.preferredPharmacyPhone?.trim() || defaultPharmacy.preferredPharmacyPhone,
         },
         select: {
           id: true,

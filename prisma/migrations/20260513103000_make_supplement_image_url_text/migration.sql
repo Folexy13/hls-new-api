@@ -1,0 +1,1 @@
+ALTER TABLE `Supplement` MODIFY COLUMN `imageUrl` TEXT NULL;

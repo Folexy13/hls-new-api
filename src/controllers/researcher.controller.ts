@@ -251,7 +251,7 @@ export class ResearcherController {
           strength: data.strength || null,
           dosageForm: null, // Moved to tags
           budgetRange: null, // Moved to tags
-          expiryDate: (data as any).expiryDate || null,
+          expiryDate: data.expiryDate || null,
           tags: data.tags,
           wholesalers: data.wholesalers?.length ? data.wholesalers : null,
           userId: req.user.id,
@@ -278,7 +278,7 @@ export class ResearcherController {
         data: {
           ...data,
           tags: data.tags,
-          expiryDate: (data as any).expiryDate,
+          ...(data.expiryDate !== undefined && { expiryDate: data.expiryDate || null }),
           dosageForm: null, // Ensure columns stay clean
           budgetRange: null,
           ...(data.strength !== undefined && { strength: data.strength || null }),

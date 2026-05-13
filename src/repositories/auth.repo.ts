@@ -14,6 +14,8 @@ export default class AuthRepositoryImpl implements AuthRepository {
       username?: string;
       phone?: string | null;
       researcherType?: "maker" | "checker" | null;
+      preferredPharmacyName?: string | null;
+      preferredPharmacyPhone?: string | null;
     }
   ): Promise<User> {
     return this.prisma.user.create({
@@ -24,6 +26,8 @@ export default class AuthRepositoryImpl implements AuthRepository {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone ?? null,
+        preferredPharmacyName: data.preferredPharmacyName ?? null,
+        preferredPharmacyPhone: data.preferredPharmacyPhone ?? null,
         role: data.role || 'benfek',
         researcherType:
           data.role === "researcher"
