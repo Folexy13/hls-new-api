@@ -7,6 +7,12 @@ const WholesalerDetailSchema = z.object({
   address: z.string().min(2, 'Wholesaler address is required').transform((value) => value.trim()),
 });
 
+const OptionalDateSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string' || value instanceof Date) return new Date(value);
+  return value;
+}, z.date().nullable()).optional();
+
 export const ResearcherSupplementSchema = z.object({
   name: z.string().min(2, 'Name is required').transform((value) => value.trim()),
   description: z.string().min(2, 'Description is required').transform((value) => value.trim()),
@@ -18,6 +24,7 @@ export const ResearcherSupplementSchema = z.object({
   strength: z.string().optional().nullable(),
   dosageForm: z.string().optional().nullable(),
   budgetRange: z.string().optional().nullable(),
+  expiryDate: OptionalDateSchema,
   tags: z.record(z.array(z.string())).optional().default({}),
   status: z.string().optional().default('in_stock'),
   wholesalers: z.array(WholesalerDetailSchema).optional().default([]),

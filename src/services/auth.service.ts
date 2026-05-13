@@ -11,6 +11,46 @@ import { EmailService } from "./email.service";
 import crypto from "crypto";
 import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 
+const HLS_PHARMACY_NAME = "HLS Pharmacy";
+
+const resolveDefaultPharmacyFromPrincipal = (principal?: {
+  profession?: string | null;
+  currentPlaceOfWork?: string | null;
+  phone?: string | null;
+  whatsappNumber?: string | null;
+  referPharmacy?: boolean | null;
+  referredPharmacyName?: string | null;
+  referredPharmacyPhone?: string | null;
+}) => {
+  const profession = principal?.profession?.trim().toLowerCase() || "";
+
+  if (profession === "hls ap") {
+    return {
+      preferredPharmacyName: HLS_PHARMACY_NAME,
+      preferredPharmacyPhone: null,
+    };
+  }
+
+  if (profession === "pharmacist" && principal?.currentPlaceOfWork?.trim()) {
+    return {
+      preferredPharmacyName: principal.currentPlaceOfWork.trim(),
+      preferredPharmacyPhone: principal.phone?.trim() || principal.whatsappNumber?.trim() || null,
+    };
+  }
+
+  if (profession !== "pharmacist" && principal?.referPharmacy && principal.referredPharmacyName?.trim()) {
+    return {
+      preferredPharmacyName: principal.referredPharmacyName.trim(),
+      preferredPharmacyPhone: principal.referredPharmacyPhone?.trim() || null,
+    };
+  }
+
+  return {
+    preferredPharmacyName: null,
+    preferredPharmacyPhone: null,
+  };
+};
+
 @injectable()
 export class AuthService {
   constructor(
@@ -189,6 +229,26 @@ export class AuthService {
       }
     }
 
+    const linkedQuizCode = data.quizCode
+      ? await this.prisma.quizCode.findUnique({
+          where: { code: data.quizCode },
+          include: {
+            creator: {
+              select: {
+                profession: true,
+                currentPlaceOfWork: true,
+                phone: true,
+                whatsappNumber: true,
+                referPharmacy: true,
+                referredPharmacyName: true,
+                referredPharmacyPhone: true,
+              },
+            },
+          },
+        })
+      : null;
+    const defaultPharmacy = resolveDefaultPharmacyFromPrincipal(linkedQuizCode?.creator);
+
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
       email,
@@ -197,7 +257,9 @@ export class AuthService {
       firstName: data.firstName,
       lastName: data.lastName,
       phone: phone || undefined,
-      role: "benfek"
+      role: "benfek",
+      preferredPharmacyName: defaultPharmacy.preferredPharmacyName || undefined,
+      preferredPharmacyPhone: defaultPharmacy.preferredPharmacyPhone || undefined,
     });
 
     if (data.quizCode) {

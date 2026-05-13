@@ -156,7 +156,7 @@ model Supplement {
   description String
   price       Float
   stock       Int
-  imageUrl    String?     // Product image URL
+  imageUrl    String?     @db.Text // Product image URL
   category    String?     // Product category
   manufacturer String?
   strength    String?
