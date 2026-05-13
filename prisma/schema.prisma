@@ -197,6 +197,7 @@ model ResearcherPackItem {
   supplementId Int
   supplement   Supplement     @relation(fields: [supplementId], references: [id], onDelete: Cascade)
   quantity     Int            @default(1)
+  rationale    String?        @db.Text
   selectedWholesalerName String?
   selectedWholesalerPrice Float?
   selectedWholesalerContact String?

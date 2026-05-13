@@ -43,6 +43,7 @@ export const DispatchPackSchema = z.object({
       selectedWholesalerContact: z.string().optional().nullable(),
       selectedWholesalerAddress: z.string().optional().nullable(),
       forceDispatchWithoutWholesaler: z.boolean().optional().default(false),
+      rationale: z.string().optional().nullable().transform((value) => (value ? value.trim() : null)),
     })
   ).min(1, 'Select at least one supplement').optional(),
   status: z.string().optional().default('dispatched'),
