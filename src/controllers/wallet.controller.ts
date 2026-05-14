@@ -1,5 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { Response } from 'express';
+import { ZodError } from 'zod';
 import { WithdrawalSchema } from '../DTOs/wallet.dto';
 import { BaseController } from './base.controller';
 import { WalletService } from '../services/wallet.service';
@@ -147,7 +148,15 @@ export class WalletController extends BaseController {
       }
       return ResponseUtil.success(res, { wallet });
     } catch (error) {
-      return ResponseUtil.error(res, error as string);
+      if (error instanceof ZodError) {
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+
+      if (error instanceof Error) {
+        return ResponseUtil.error(res, error.message, 400, error.message);
+      }
+
+      return ResponseUtil.error(res, 'Failed to request withdrawal', 500, error);
     }
   }
 
