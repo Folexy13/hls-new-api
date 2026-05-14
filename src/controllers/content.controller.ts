@@ -153,6 +153,103 @@ export class ContentController {
     }
   };
 
+  getPrincipalArticle = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!this.ensurePrincipal(req, res)) return;
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT a.*, u.firstName, u.lastName
+         FROM Article a
+         INNER JOIN User u ON u.id = a.userId
+         WHERE a.id = ? AND a.userId = ?
+         LIMIT 1`,
+        articleId,
+        req.user.id
+      );
+
+      if (!rows.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const row = rows[0];
+      return ResponseUtil.success(res, {
+        article: {
+          ...row,
+          tags: this.parseTags(row.tags),
+          author: `${row.firstName || ''} ${row.lastName || ''}`.trim(),
+        },
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve article', 500, error);
+    }
+  };
+
+  updateArticle = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!this.ensurePrincipal(req, res)) return;
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const existing = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND userId = ? LIMIT 1`,
+        articleId,
+        req.user.id
+      );
+      if (!existing.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const data = ArticleSchema.parse(req.body);
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE Article
+         SET title = ?,
+             description = ?,
+             content = ?,
+             category = ?,
+             status = ?,
+             excerpt = ?,
+             imageUrl = ?,
+             readTime = ?,
+             tags = CAST(? AS JSON),
+             updatedAt = NOW()
+         WHERE id = ? AND userId = ?`,
+        data.title,
+        data.description,
+        data.content,
+        data.category,
+        data.status,
+        data.excerpt || data.description.slice(0, 180),
+        data.imageUrl || null,
+        data.readTime || null,
+        JSON.stringify(data.tags || {}),
+        articleId,
+        req.user.id
+      );
+
+      return ResponseUtil.success(res, null, 'Article updated successfully');
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Validation failed', 400, error);
+      return ResponseUtil.error(res, 'Failed to update article', 500, error);
+    }
+  };
+
+  deleteArticle = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!this.ensurePrincipal(req, res)) return;
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const result = await this.prisma.$executeRawUnsafe(
+        `DELETE FROM Article WHERE id = ? AND userId = ?`,
+        articleId,
+        req.user.id
+      );
+
+      if (!result) return ResponseUtil.error(res, 'Article not found', 404);
+      return ResponseUtil.success(res, null, 'Article deleted successfully');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to delete article', 500, error);
+    }
+  };
+
   getPrincipalPodcasts = async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!this.ensurePrincipal(req, res)) return;
