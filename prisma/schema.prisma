@@ -180,6 +180,7 @@ model ResearcherPack {
   quizCode     String
   packId       String
   packName     String
+  rationale    String?              @db.Text
   researcherId Int
   researcher   User                 @relation(fields: [researcherId], references: [id], onDelete: Cascade)
   items        ResearcherPackItem[]
