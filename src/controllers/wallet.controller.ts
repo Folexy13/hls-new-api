@@ -209,7 +209,18 @@ export class WalletController extends BaseController {
 
       return ResponseUtil.success(res, { withdrawal });
     } catch (error) {
-      return ResponseUtil.error(res, error as string);
+      if (error instanceof ZodError) {
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+      if (error instanceof Error) {
+        const statusCode = /wallet not found/i.test(error.message)
+          ? 404
+          : /insufficient|minimum|limit|bank|account|recipient|transfer/i.test(error.message)
+            ? 400
+            : 500;
+        return ResponseUtil.error(res, error.message, statusCode, error.message);
+      }
+      return ResponseUtil.error(res, 'Failed to submit withdrawal request', 500, error);
     }
   }
 
@@ -240,7 +251,7 @@ export class WalletController extends BaseController {
       const withdrawals = await this.walletService.getWithdrawals(userId);
       return ResponseUtil.success(res, { withdrawals });
     } catch (error) {
-      return ResponseUtil.error(res, error as string);
+      return ResponseUtil.error(res, 'Failed to retrieve withdrawals', 500, error);
     }
   }
 
@@ -289,7 +300,7 @@ export class WalletController extends BaseController {
 
       return ResponseUtil.success(res, { withdrawal });
     } catch (error) {
-      return ResponseUtil.error(res, error as string);
+      return ResponseUtil.error(res, 'Failed to retrieve withdrawal', 500, error);
     }
   }
 

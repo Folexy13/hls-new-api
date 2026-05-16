@@ -126,7 +126,7 @@ export class ResearcherController {
             familyCondition: formatHealthField(quizCode.familyCondition),
             medications: formatHealthField(quizCode.medications),
             hasCurrentCondition: quizCode.hasCurrentCondition,
-            currentConditions: (quizCode as any).currentConditions ?? undefined,
+            currentConditions: formatHealthField((quizCode as any).currentConditions),
           },
           quiz: {
             basics: {
@@ -327,11 +327,13 @@ export class ResearcherController {
           quizCode: data.code,
           packId: data.packId,
           packName: data.packName,
+          rationale: data.rationale || null,
           researcherId: req.user.id,
           status: data.status,
         },
         update: {
           packName: data.packName,
+          rationale: data.rationale || null,
           researcherId: req.user.id,
           status: data.status,
         },
