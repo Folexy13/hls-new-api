@@ -5,6 +5,8 @@ import { WithdrawalDTO } from '../DTOs/wallet.dto';
 import { Role } from '../types/auth.types';
 import { PaystackService } from './paystack.service';
 
+const PRINCIPAL_MIN_WITHDRAWAL_AMOUNT = 350;
+
 // Define wallet and withdrawal types
 interface Wallet {
   id: number;
@@ -70,6 +72,10 @@ export class WalletService {
     walletId: number,
     data: WithdrawalDTO
   ): Promise<Withdrawal> {
+    if (userRole === 'principal' && data.amount < PRINCIPAL_MIN_WITHDRAWAL_AMOUNT) {
+      throw new Error(`Minimum withdrawal amount is NGN ${PRINCIPAL_MIN_WITHDRAWAL_AMOUNT}.00`);
+    }
+
     // Check monthly withdrawal limit
     const today = new Date();
     const month = today.getMonth() + 1;
@@ -92,7 +98,7 @@ export class WalletService {
       throw new Error('Wallet not found');
     }
     if (wallet.balance < data.amount) {
-      throw new Error('Insufficient balance');
+      throw new Error('Insufficient withdrawable balance');
     }
 
     // Create withdrawal request

@@ -78,7 +78,7 @@ export class PrincipalController extends BaseController {
         scares: formatHealthField(benfek.scares),
         familyCondition: formatHealthField(benfek.familyCondition),
         medications: formatHealthField(benfek.medications),
-        currentConditions: benfek.currentConditions ?? undefined,
+        currentConditions: formatHealthField(benfek.currentConditions),
       }));
       
       return ResponseUtil.success(

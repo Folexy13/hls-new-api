@@ -185,7 +185,7 @@ export class BenfekController {
               familyCondition: formatHealthField(quizCode.familyCondition),
               medications: formatHealthField(quizCode.medications),
               hasCurrentCondition: quizCode.hasCurrentCondition,
-              currentConditions: (quizCode as any).currentConditions ?? undefined,
+              currentConditions: formatHealthField((quizCode as any).currentConditions),
             },
             principal: quizCode.creator,
           }

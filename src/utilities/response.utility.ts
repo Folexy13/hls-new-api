@@ -54,14 +54,23 @@ export class ResponseUtil {
 
   static error(
     res: Response,
-    message: string = 'Operation failed',
+    message: any = 'Operation failed',
     statusCode: number = 500,
     error?: any
   ): Response {
-    this.logInternalError(message, statusCode, error);
+    const normalizedMessage =
+      typeof message === 'string'
+        ? message
+        : message instanceof Error
+          ? message.message
+          : error instanceof Error
+            ? error.message
+            : 'Operation failed';
 
-    const safeMessage = this.getSafeMessage(message, statusCode, error);
-    const safeDetails = this.formatError(error, statusCode);
+    this.logInternalError(normalizedMessage, statusCode, error || message);
+
+    const safeMessage = this.getSafeMessage(normalizedMessage, statusCode, error || message);
+    const safeDetails = this.formatError(error || message, statusCode);
     const errorResponse: ApiResponse<null> = {
       success: false,
       message: safeMessage,

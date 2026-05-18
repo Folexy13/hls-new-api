@@ -557,7 +557,7 @@ export class QuizCodeController extends BaseController {
         familyCondition: formatHealthField(code.familyCondition),
         medications: formatHealthField(code.medications),
         hasCurrentCondition: code.hasCurrentCondition,
-        currentConditions: (code as any).currentConditions ?? undefined,
+        currentConditions: formatHealthField((code as any).currentConditions),
       }));
 
       ResponseUtil.success(res, {

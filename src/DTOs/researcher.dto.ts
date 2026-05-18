@@ -40,6 +40,7 @@ export const DispatchPackSchema = z.object({
   code: z.string().min(1, 'Benfek code is required').transform((value) => value.trim().toUpperCase()),
   packId: z.string().min(1, 'Pack ID is required'),
   packName: z.string().min(1, 'Pack name is required'),
+  rationale: z.string().optional().nullable().transform((value) => (value ? value.trim() : null)),
   supplementIds: z.array(z.number().int().positive()).min(1, 'Select at least one supplement').optional(),
   items: z.array(
     z.object({
