@@ -136,11 +136,17 @@ export class WalletService {
         transferReference: transferReference || null,
         transferRecipientCode: recipientCode,
       } as any);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Withdrawal processing error details:', error?.response?.data || error);
       await this.creditWallet(walletId, data.amount);
       await this.withdrawalRepository.update(withdrawal.id, {
         status: 'failed' as any,
       } as any);
+      
+      // If it's an axios error with a message from paystack, throw a better error
+      if (error?.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
       throw error;
     }
 
