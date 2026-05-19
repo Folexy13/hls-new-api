@@ -29,5 +29,10 @@ export const createPaystackRoutes = (container: Container) => {
     authGuard.verify(),
     authenticatedHandler(paystackController.checkoutPack)
   );
+  router.post(
+    '/webhook',
+    paystackController.handleWebhook
+  );
+
   return router;
 };

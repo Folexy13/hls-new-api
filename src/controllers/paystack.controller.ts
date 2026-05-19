@@ -606,4 +606,81 @@ export class PaystackController extends BaseController {
       return ResponseUtil.error(res, 'Unable to verify payment right now. Please try again shortly.', 500, error);
     }
   };
+
+  handleWebhook = async (req: any, res: any) => {
+    try {
+      const signature = req.headers['x-paystack-signature'] as string;
+      if (!signature) {
+        return res.status(400).send('No signature');
+      }
+
+      const event = req.body;
+      if (!event) {
+        return res.status(400).send('No body');
+      }
+
+      console.log('Received Paystack Webhook:', event.event);
+
+      if (event.event === 'transfer.success') {
+        const transferCode = event.data?.transfer_code;
+        const reference = event.data?.reference;
+
+        if (!transferCode && !reference) {
+          return res.status(200).send('OK');
+        }
+
+        const withdrawal = await this.prisma.withdrawal.findFirst({
+          where: {
+            OR: [
+              ...(reference ? [{ transferReference: reference }] : []),
+              ...(transferCode ? [{ transferReference: transferCode }] : [])
+            ]
+          }
+        });
+
+        if (withdrawal && withdrawal.status === 'processing') {
+          await this.prisma.withdrawal.update({
+            where: { id: withdrawal.id },
+            data: { status: 'success' }
+          });
+        }
+      } else if (event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
+        const transferCode = event.data?.transfer_code;
+        const reference = event.data?.reference;
+
+        if (!transferCode && !reference) {
+          return res.status(200).send('OK');
+        }
+
+        const withdrawal = await this.prisma.withdrawal.findFirst({
+          where: {
+            OR: [
+              ...(reference ? [{ transferReference: reference }] : []),
+              ...(transferCode ? [{ transferReference: transferCode }] : [])
+            ]
+          }
+        });
+
+        if (withdrawal && withdrawal.status === 'processing') {
+          await this.prisma.withdrawal.update({
+            where: { id: withdrawal.id },
+            data: { status: 'failed' }
+          });
+          
+          // Refund wallet
+          await this.prisma.wallet.update({
+            where: { id: withdrawal.walletId },
+            data: {
+              balance: { increment: withdrawal.amount }
+            }
+          });
+        }
+      }
+
+      return res.status(200).send('OK');
+    } catch (error) {
+      console.error('Paystack webhook error:', error);
+      return res.status(500).send('Internal Server Error');
+    }
+  };
 }
