@@ -9,6 +9,12 @@ export const createPaystackRoutes = (container: Container) => {
   const paystackController = container.get(PaystackController);
   const authGuard = container.get(AuthGuard);
 
+  // Mount webhook route before authentication
+  router.post(
+    '/webhook',
+    paystackController.handleWebhook
+  );
+
   router.post(
     '/initialize',
     authGuard.verify(),
