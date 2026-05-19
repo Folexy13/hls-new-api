@@ -83,6 +83,19 @@ export class AuthService {
       password: hashedPassword,
     });
 
+    if (user.role === "principal") {
+      await this.emailService.notifyAdmin(
+        "New Principal Registration",
+        "Registered principal details",
+        [
+          { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() },
+          { label: "Email", value: user.email },
+          { label: "Phone", value: user.phone },
+          { label: "Role", value: user.role }
+        ]
+      ).catch(console.error);
+    }
+
     return this.createAuthResponse(user);
   }
 
@@ -212,11 +225,16 @@ export class AuthService {
     });
 
     // Notify admin
-    await this.emailService.sendEmail(
-      "admin@hlsnigeria.com",
+    await this.emailService.notifyAdmin(
       "New Benfek Registration",
-      `<p>A new benfek has registered with username: <b>${data.username}</b> and email: <b>${email}</b>.</p>`
-    );
+      "Complete data Details of registered benfek",
+      [
+        { label: "Username", value: data.username },
+        { label: "Email", value: email },
+        { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+        { label: "Role", value: user.role }
+      ]
+    ).catch(console.error);
 
     return this.createAuthResponse(user);
   }
@@ -284,11 +302,17 @@ export class AuthService {
     }
 
     // Notify admin
-    await this.emailService.sendEmail(
-      "admin@hlsnigeria.com",
+    await this.emailService.notifyAdmin(
       "New Benfek Registration (Unreferred)",
-      `<p>A new benfek has registered with email: <b>${email}</b>${data.firstName ? ` and name: <b>${data.firstName} ${data.lastName}</b>` : ""}.</p>`
-    );
+      "Complete data Details of registered benfek",
+      [
+        { label: "Username", value: user.username },
+        { label: "Email", value: email },
+        { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+        { label: "Phone", value: user.phone || 'N/A' },
+        { label: "Quiz Code", value: data.quizCode || 'None' }
+      ]
+    ).catch(console.error);
 
     return this.createAuthResponse(user);
   }

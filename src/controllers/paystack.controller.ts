@@ -19,6 +19,8 @@ import {
 import { computePrincipalCredit } from '../utilities/principal-credit.utility';
 import { ResponseUtil } from '../utilities/response.utility';
  
+import { EmailService } from '../services/email.service';
+
 @injectable()
 export class PaystackController extends BaseController {
   constructor(
@@ -28,7 +30,8 @@ export class PaystackController extends BaseController {
     @inject(PaystackRepository) private paystackRepository: PaystackRepository,
     @inject(OrderRepository) private orderRepository: OrderRepository,
     @inject(SupplementRepository) private supplementRepository: SupplementRepository,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {
     super(container);
   }
@@ -512,6 +515,21 @@ export class PaystackController extends BaseController {
             orderNumber: metadata.orderNumber || String(orderId),
             amount: result.data.amount / 100,
           });
+
+          const isPack = metadata.checkoutType === 'pack';
+          await this.emailService.notifyAdmin(
+            isPack ? "New Pack Purchase" : "New Pharmacy Purchase",
+            isPack ? "Purchases with pack details in my nutrient pack section" : "Purchase of item from pharmacy",
+            [
+              { label: "User", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+              { label: "Email", value: user.email },
+              { label: "Order ID", value: String(orderId) },
+              { label: "Amount", value: `₦${result.data.amount / 100}` },
+              { label: "Type", value: isPack ? "Nutrient Pack" : "Pharmacy Item" },
+              { label: "Pack ID", value: metadata.packId || "N/A" },
+              { label: "Pack Name", value: metadata.packName || "N/A" }
+            ]
+          ).catch(console.error);
         }
 
         return res.status(200).json({

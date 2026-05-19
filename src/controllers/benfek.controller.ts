@@ -55,11 +55,14 @@ const resolveDefaultPharmacyFromPrincipal = (principal?: {
   };
 };
 
+import { EmailService } from '../services/email.service';
+
 @injectable()
 export class BenfekController {
   constructor(
     @inject('PrismaClient') private prisma: PrismaClient,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {}
 
   private async buildProfile(userId: number) {
@@ -918,6 +921,24 @@ export class BenfekController {
           isRead: false,
         },
       });
+
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      const isPrincipal = user?.role === 'principal';
+      const userType = isPrincipal ? 'Principal' : 'Benfek';
+
+      await this.emailService.notifyAdmin(
+        `New Support Ticket from ${userType}`,
+        `Complaints or messages from ${userType.toLowerCase()}`,
+        [
+          { label: "User ID", value: String(userId) },
+          { label: "User Name", value: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown' },
+          { label: "Email", value: user?.email || 'N/A' },
+          { label: "Role", value: user?.role || 'N/A' },
+          { label: "Category", value: data.category },
+          { label: "Subject", value: data.subject },
+          { label: "Message", value: data.message }
+        ]
+      ).catch(console.error);
 
       return ResponseUtil.success(
         res,

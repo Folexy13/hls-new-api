@@ -36,11 +36,14 @@ interface Withdrawal {
   updatedAt: Date;
 }
 
+import { EmailService } from './email.service';
+
 @injectable()
 export class WalletService {
   constructor(
     @inject(WalletRepository) private walletRepository: WalletRepository,
-    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository
+    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository,
+    @inject(EmailService) private emailService: EmailService
   ) {}  async getWallet(userId: number): Promise<Wallet | null> {
     const wallet = await this.walletRepository.findByUserId(userId);
     if (!wallet) return null;
@@ -112,6 +115,19 @@ export class WalletService {
       month,
       year
     });
+
+    if (userRole === 'principal') {
+      await this.emailService.notifyAdmin(
+        "New Principal Withdrawal Request",
+        "Principal's request for withdrawal",
+        [
+          { label: "Principal User ID", value: String(userId) },
+          { label: "Amount", value: `₦${data.amount}` },
+          { label: "Bank Account", value: data.accountNumber },
+          { label: "Bank Name", value: data.bankName || 'N/A' },
+        ]
+      ).catch(console.error);
+    }
 
     // Debit wallet
     await this.debitWallet(walletId, data.amount);
