@@ -211,6 +211,13 @@ export class AuthService {
       role: "benfek"
     });
 
+    // Notify admin
+    await this.emailService.sendEmail(
+      "admin@hlsnigeria.com",
+      "New Benfek Registration",
+      `<p>A new benfek has registered with username: <b>${data.username}</b> and email: <b>${email}</b>.</p>`
+    );
+
     return this.createAuthResponse(user);
   }
 
@@ -275,6 +282,13 @@ export class AuthService {
         },
       });
     }
+
+    // Notify admin
+    await this.emailService.sendEmail(
+      "admin@hlsnigeria.com",
+      "New Benfek Registration (Unreferred)",
+      `<p>A new benfek has registered with email: <b>${email}</b>${data.firstName ? ` and name: <b>${data.firstName} ${data.lastName}</b>` : ""}.</p>`
+    );
 
     return this.createAuthResponse(user);
   }
