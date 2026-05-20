@@ -133,6 +133,39 @@ export class EmailService {
   }
 
   /**
+   * Generates a generic nice HTML template for admin notifications
+   */
+  private getAdminEmailTemplate(title: string, details: {label: string, value: any}[]): string {
+    const detailsHtml = details
+      .filter(d => d.value !== undefined && d.value !== null && d.value !== "")
+      .map(d => `<p style="margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee;"><strong style="color: #555; display: inline-block; width: 150px;">${d.label}:</strong> <span style="color: #333;">${d.value}</span></p>`)
+      .join("");
+
+    return `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 650px; margin: 0 auto; padding: 20px; color: #333; background-color: #f4f7f6; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #0056b3; margin: 0; padding-bottom: 10px; border-bottom: 2px solid #0056b3;">${title}</h2>
+        </div>
+        <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          ${detailsHtml}
+        </div>
+        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #888;">
+          <p>This is an automated notification from the HLS Nigeria system.</p>
+          <p>&copy; ${new Date().getFullYear()} HLS Nigeria.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Sends an admin notification email using the standardized template
+   */
+  async notifyAdmin(subject: string, title: string, details: {label: string, value: any}[]): Promise<boolean> {
+    const htmlBody = this.getAdminEmailTemplate(title, details);
+    return this.sendEmail("admin@hlsnigeria.com", subject, htmlBody);
+  }
+
+  /**
    * Magic Link template for Forgot Password / Reset Password
    */
   async sendMagicLink(toEmail: string, resetToken: string): Promise<boolean> {
