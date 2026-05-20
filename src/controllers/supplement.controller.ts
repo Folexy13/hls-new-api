@@ -306,10 +306,11 @@ export class SupplementController extends BaseController {
    */
   async getAllSupplementsForNonBenfek(req: AuthenticatedRequest, res: Response) {
     try {
-      const { page = 1, limit = 10 } = req.query;
+      const { page = 1, limit = 10, role } = req.query;
       const pageNum = parseInt(page as string);
       const limitNum = parseInt(limit as string);
-      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum);
+      const roleFilter = typeof role === 'string' && role.toLowerCase() === 'researcher' ? 'researcher' : undefined;
+      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, undefined, roleFilter);
 
       return ResponseUtil.success(res, {
         supplements,

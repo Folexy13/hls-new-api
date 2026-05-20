@@ -9,6 +9,7 @@ type SupplementWithUser = Prisma.SupplementGetPayload<{
         firstName: true;
         lastName: true;
         email: true;
+        role: true;
       };
     };
   };
@@ -22,8 +23,12 @@ export class SupplementRepository {
     skip?: number,
     take?: number,
     userId?: number,
+    userRole?: string,
   ): Promise<{ items: SupplementWithUser[]; total: number }> {
-    const where = userId ? { userId } : {};
+    const where: Prisma.SupplementWhereInput = {
+      ...(userId ? { userId } : {}),
+      ...(userRole ? { user: { is: { role: userRole as any } } } : {}),
+    };
     
     const [supplements, total] = await Promise.all([
       this.prisma.supplement.findMany({
@@ -36,7 +41,8 @@ export class SupplementRepository {
               id: true,
               firstName: true,
               lastName: true,
-              email: true
+              email: true,
+              role: true
             }
           }
         },
@@ -62,7 +68,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       }
@@ -78,7 +85,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       },
@@ -102,7 +110,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       },
@@ -122,7 +131,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       }
@@ -139,7 +149,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       }
@@ -169,7 +180,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       },
@@ -193,7 +205,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       }
@@ -220,7 +233,8 @@ export class SupplementRepository {
             id: true,
             firstName: true,
             lastName: true,
-            email: true
+            email: true,
+            role: true
           }
         }
       }
