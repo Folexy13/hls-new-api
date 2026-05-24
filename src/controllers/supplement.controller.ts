@@ -154,7 +154,7 @@ export class SupplementController extends BaseController {
    *           type: integer
    *           minimum: 1
    *           maximum: 100
-   *           default: 10
+   *           default: 20
    *     responses:
    *       200:
    *         description: List of supplements retrieved successfully
@@ -306,9 +306,9 @@ export class SupplementController extends BaseController {
    */
   async getAllSupplementsForNonBenfek(req: AuthenticatedRequest, res: Response) {
     try {
-      const { page = 1, limit = 10, role } = req.query;
-      const pageNum = parseInt(page as string);
-      const limitNum = parseInt(limit as string);
+      const { page = 1, limit = 20, role } = req.query;
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
       const roleFilter = typeof role === 'string' && role.toLowerCase() === 'researcher' ? 'researcher' : undefined;
       const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, undefined, roleFilter);
 

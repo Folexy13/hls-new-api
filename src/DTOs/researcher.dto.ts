@@ -13,9 +13,16 @@ const OptionalDateSchema = z.preprocess((value) => {
   return value;
 }, z.date().nullable()).optional();
 
+const OptionalRatingSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') return Number(value.replace(/%/g, '').trim());
+  return value;
+}, z.number().min(0, 'Rating cannot be negative').max(100, 'Rating cannot exceed 100').nullable()).optional();
+
 export const ResearcherSupplementSchema = z.object({
   name: z.string().min(2, 'Name is required').transform((value) => value.trim()),
   description: z.string().min(2, 'Description is required').transform((value) => value.trim()),
+  rating: OptionalRatingSchema,
   price: z.number().nonnegative('Price cannot be negative'),
   stock: z.number().int().nonnegative('Stock cannot be negative').optional().default(0),
   imageUrl: z.string().optional().nullable(),
