@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { WithdrawalSchema } from '../DTOs/wallet.dto';
 import { BaseController } from './base.controller';
 import { WalletService } from '../services/wallet.service';
+import { PaystackService } from '../services/paystack.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import type { Role } from '.prisma/client';
@@ -280,6 +281,90 @@ export class WalletController extends BaseController {
       return ResponseUtil.success(res, { withdrawal });
     } catch (error) {
       return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/wallet/banks:
+   *   get:
+   *     tags: [Wallet]
+   *     summary: Get list of supported banks
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Banks retrieved successfully
+   */
+  async getBanks(req: AuthenticatedRequest, res: Response) {
+    try {
+      const banks = await PaystackService.getBanks();
+      return ResponseUtil.success(res, { banks });
+    } catch (error: any) {
+      return ResponseUtil.error(res, error?.message || 'Failed to fetch banks');
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/v2/wallet/resolve-account:
+   *   get:
+   *     tags: [Wallet]
+   *     summary: Resolve bank account details
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - name: bankName
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - name: accountNumber
+   *         in: query
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Bank account resolved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 accountName:
+   *                   type: string
+   *       400:
+   *         description: Invalid input parameters
+   *       404:
+   *         description: Could not resolve account name
+   */
+  async resolveBankAccount(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { bankName, bankCode, accountNumber } = req.query;
+
+      if ((!bankName && !bankCode) || !accountNumber) {
+        return ResponseUtil.error(res, 'Please select a bank and enter a valid account number.', 400);
+      }
+
+      const accountName = await PaystackService.resolveAccountNumber(
+        String(bankName || ''),
+        String(accountNumber),
+        bankCode ? String(bankCode) : undefined
+      );
+
+      return ResponseUtil.success(res, { accountName });
+    } catch (error: any) {
+      const upstreamStatus = error?.response?.status;
+      const message = upstreamStatus === 429
+        ? 'Account name lookup is temporarily busy. Please wait a moment and try again.'
+        : 'We could not confirm the account name. Please check the bank and account number, then try again.';
+
+      return ResponseUtil.error(
+        res,
+        message,
+        upstreamStatus === 429 ? 429 : upstreamStatus === 422 ? 404 : 400
+      );
     }
   }
 }

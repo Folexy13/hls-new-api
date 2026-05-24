@@ -5,14 +5,17 @@ import { Container } from 'inversify';
 import { ResponseUtil } from '../utilities/response.utility';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { PrincipalService } from '../services/principal.service';
+import { NotificationService } from '../services/notification.service';
 import { CreateBenfekRecordSchema, CreatePrincipalUserSchema, UpdatePrincipalUserSchema } from '../DTOs/principal.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
+import { formatHealthField } from '../utilities/health-field.utility';
 
 @injectable()
 export class PrincipalController extends BaseController {
   constructor(
     container: Container,
-    @inject(PrincipalService) private principalService: PrincipalService
+    @inject(PrincipalService) private principalService: PrincipalService,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
   }
@@ -45,6 +48,12 @@ export class PrincipalController extends BaseController {
       // Change: Create a QuizCode instead of a direct User
       // This allows the Benfek to use the code to register themselves later
       const benfek = await this.principalService.createBenfekRecord(req.user.id, data);
+
+      await this.notificationService.sendBenfekCodeMessage({
+        phone: data.benfekPhone,
+        code: benfek.code,
+        benfekName: data.benfekName,
+      }).catch(() => undefined);
       
       return ResponseUtil.success(res, benfek, 'Benfek created and Quiz Code generated successfully', 201);
     } catch (error) {
@@ -63,10 +72,18 @@ export class PrincipalController extends BaseController {
       const name = req.query.name as string;
       
       const { benfeks, total } = await this.principalService.getBenfeksByPrincipal(req.user.id, page, limit, name);
+      const formattedBenfeks = benfeks.map((benfek: any) => ({
+        ...benfek,
+        allergies: formatHealthField(benfek.allergies),
+        scares: formatHealthField(benfek.scares),
+        familyCondition: formatHealthField(benfek.familyCondition),
+        medications: formatHealthField(benfek.medications),
+        currentConditions: benfek.currentConditions ?? undefined,
+      }));
       
       return ResponseUtil.success(
         res,
-        { benfeks },
+        { benfeks: formattedBenfeks },
         'Benfeks retrieved successfully',
         200,
         { pagination: PaginationUtil.getPaginationMetadata(total, page, limit) }
@@ -127,6 +144,71 @@ export class PrincipalController extends BaseController {
       return ResponseUtil.success(res, summary, 'Income summary retrieved');
     } catch (error) {
       return ResponseUtil.error(res, (error as Error).message || 'Failed to retrieve income summary');
+    }
+  }
+
+  async getNotificationSummary(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const summary = await this.principalService.getNotificationSummary(req.user.id);
+      return ResponseUtil.success(res, summary, 'Notification summary retrieved');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to retrieve notification summary');
+    }
+  }
+
+  async markNotificationRead(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const notificationId = Number.parseInt(String(req.params.id), 10);
+      if (!notificationId) {
+        return ResponseUtil.error(res, 'Invalid notification id', 400);
+      }
+
+      await this.principalService.markNotificationRead(req.user.id, notificationId);
+      return ResponseUtil.success(res, { id: notificationId }, 'Notification marked as read');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to mark notification as read');
+    }
+  }
+
+  async markAllNotificationsRead(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      await this.principalService.markAllNotificationsRead(req.user.id);
+      return ResponseUtil.success(res, {}, 'Notifications marked as read');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to mark notifications as read');
+    }
+  }
+
+  async deleteNotification(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const notificationId = Number.parseInt(String(req.params.id), 10);
+      if (!notificationId) {
+        return ResponseUtil.error(res, 'Invalid notification id', 400);
+      }
+
+      await this.principalService.deleteNotification(req.user.id, notificationId);
+      return ResponseUtil.success(res, { id: notificationId }, 'Notification deleted');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to delete notification');
+    }
+  }
+
+  async resolveCredit(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensurePrincipalRole(req, res)) return;
+      const creditId = Number.parseInt(String(req.params.id), 10);
+      if (!creditId) {
+        return ResponseUtil.error(res, 'Invalid credit id', 400);
+      }
+
+      const summary = await this.principalService.resolvePrincipalCredit(req.user.id, creditId);
+      return ResponseUtil.success(res, { id: creditId, summary }, 'Credit resolved');
+    } catch (error) {
+      return ResponseUtil.error(res, (error as Error).message || 'Failed to resolve credit');
     }
   }
 

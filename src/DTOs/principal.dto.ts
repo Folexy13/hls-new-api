@@ -1,6 +1,26 @@
 import { z } from 'zod';
 import { CreatePrincipalProfileSchema, UpdatePrincipalProfileSchema } from './profiles.dto';
 
+const optionalMultiValueField = z
+  .union([z.array(z.string()), z.string(), z.undefined()])
+  .transform((value) => {
+    if (Array.isArray(value)) {
+      const normalized = value.map((item) => item.trim()).filter(Boolean);
+      return normalized.length ? normalized : undefined;
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      return trimmed
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    return undefined;
+  });
+
 const PasswordSchema = z
   .string()
   .transform(val => val.trim())
@@ -24,11 +44,17 @@ export const CreateBenfekUserSchema = CreatePrincipalProfileSchema.extend({
 
 export const CreateBenfekRecordSchema = z.object({
   benfekName: z.string().min(2, 'Name must be at least 2 characters'),
+  benfekEmail: z.string().email('Invalid email format').transform(val => val.trim()),
   benfekPhone: z.string().min(10, 'Phone must be at least 10 characters'),
-  allergies: z.string().optional(),
-  scares: z.string().optional(),
-  familyCondition: z.string().optional(),
-  medications: z.string().optional(),
+  benfekAge: z.string().min(1, 'Age is required'),
+  benfekGender: z.string().min(1, "Gender is required"),
+  benfekWeight: z.string().min(1, 'Weight is required'),
+  benfekHeight: z.string().min(1, 'Height is required'),
+  allergies: optionalMultiValueField,
+  scares: optionalMultiValueField,
+  familyCondition: optionalMultiValueField,
+  medications: optionalMultiValueField,
+  currentConditions: optionalMultiValueField,
   hasCurrentCondition: z.boolean().default(false),
 });
 

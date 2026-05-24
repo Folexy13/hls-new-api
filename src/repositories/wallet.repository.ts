@@ -39,7 +39,7 @@ export class WalletRepository implements IRepository<Wallet> {
       include: { withdrawals: true }
     });
   }
-
+  
   async update(id: number, data: Partial<Wallet>): Promise<Wallet> {
     return this.prisma.wallet.update({
       where: { id },

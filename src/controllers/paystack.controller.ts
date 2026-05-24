@@ -1,25 +1,169 @@
 import { inject, injectable } from 'inversify';
 import { Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { PaystackService } from '../services/paystack.service';
 import { CartService } from '../services/cart.service';
 import { PaystackRepository } from '../repositories/paystack.repository';
 import { OrderRepository } from '../repositories/order.repository';
 import { SupplementRepository } from '../repositories/supplement.repository';
 import { AuthenticatedRequest } from '../types/auth.types';
+import { NotificationService } from '../services/notification.service';
 import { BaseController } from './base.controller';
 import { Container } from 'inversify';
-import { PaystackInitializeSchema, PaystackInitializeDTO } from '../DTOs/paystack.dto';
-
+import {
+  PaystackInitializeSchema,
+  PaystackInitializeDTO,
+  PaystackPackCheckoutDTO,
+  PaystackPackCheckoutSchema,
+} from '../DTOs/paystack.dto';
+import { computePrincipalCredit } from '../utilities/principal-credit.utility';
+import { ResponseUtil } from '../utilities/response.utility';
+ 
 @injectable()
 export class PaystackController extends BaseController {
   constructor(
     container: Container,
+    @inject('PrismaClient') private prisma: PrismaClient,
     @inject(CartService) private cartService: CartService,
     @inject(PaystackRepository) private paystackRepository: PaystackRepository,
     @inject(OrderRepository) private orderRepository: OrderRepository,
-    @inject(SupplementRepository) private supplementRepository: SupplementRepository
+    @inject(SupplementRepository) private supplementRepository: SupplementRepository,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
+  }
+
+  private async recordPrincipalCreditForPack(params: {
+    orderId: number;
+    paymentId: number;
+    paymentReference: string;
+    packId: string;
+    packName: string;
+    quizCode: string;
+  }) {
+    const quizCodeRecord = await this.prisma.quizCode.findUnique({
+      where: { code: params.quizCode },
+      select: { createdBy: true, benfekName: true },
+    });
+
+    if (!quizCodeRecord?.createdBy) {
+      return;
+    }
+
+    const existingCredit = await this.prisma.principalCredit.findFirst({
+      where: {
+        paymentId: params.paymentId,
+        quizCode: params.quizCode,
+        packId: params.packId,
+      },
+      select: { id: true },
+    });
+
+    if (existingCredit) {
+      return;
+    }
+
+    const wallet = await this.prisma.wallet.upsert({
+      where: { userId: quizCodeRecord.createdBy },
+      update: {},
+      create: {
+        userId: quizCodeRecord.createdBy,
+        balance: 0,
+      },
+      select: { id: true, balance: true },
+    });
+
+    const packRows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT rpi.id,
+              rpi.quantity,
+              rpi.selectedWholesalerName,
+              rpi.selectedWholesalerPrice,
+              rpi.dispatchedWithoutWholesaler,
+              rpi.effectiveMarkupFactor,
+              s.name AS supplementName,
+              s.price AS sellingPrice
+       FROM ResearcherPackItem rpi
+       INNER JOIN ResearcherPack rp ON rp.id = rpi.packId
+       INNER JOIN Supplement s ON s.id = rpi.supplementId
+       WHERE rp.packId = ? AND rp.quizCode = ?
+       ORDER BY rpi.id ASC`,
+      params.packId,
+      params.quizCode
+    );
+
+    if (!Array.isArray(packRows) || packRows.length === 0) {
+      return;
+    }
+
+    const supplementSummaries = packRows.map((row) => {
+      const qty = Number(row.quantity || 1);
+      const sellingPrice = Number(row.sellingPrice || 0);
+      const amount = sellingPrice * qty;
+      const hasSelectedWholesaler =
+        row.selectedWholesalerName && Number.isFinite(Number(row.selectedWholesalerPrice)) && Number(row.selectedWholesalerPrice) > 0;
+      const markupFactor = Number(row.effectiveMarkupFactor || 1.3) || 1.3;
+      const costPrice = hasSelectedWholesaler
+        ? Number(row.selectedWholesalerPrice || 0) * qty
+        : amount / markupFactor;
+      const credit = computePrincipalCredit(amount, costPrice);
+
+      return {
+        line: `${String(row.supplementName || 'Supplement')} x${qty}`,
+        amount,
+        costPrice,
+        markupFactor,
+        selectedWholesalerName: row.selectedWholesalerName || null,
+        dispatchedWithoutWholesaler: Boolean(row.dispatchedWithoutWholesaler),
+        ...credit,
+      };
+    });
+
+    const aggregate = supplementSummaries.reduce(
+      (acc, item) => {
+        acc.amount += item.amount;
+        acc.costPrice += item.costPrice;
+        acc.tax += item.tax;
+        acc.serviceCharge += item.serviceCharge;
+        acc.hlsCommission += item.hlsCommission;
+        acc.principalShare += item.principalShare;
+        return acc;
+      },
+      { amount: 0, costPrice: 0, tax: 0, serviceCharge: 0, hlsCommission: 0, principalShare: 0 }
+    );
+
+    await this.prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: aggregate.principalShare } },
+    });
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO PrincipalCredit
+      (principalId, walletId, quizCode, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unresolved', ?, NOW(), NOW())`,
+      quizCodeRecord.createdBy,
+      wallet.id,
+      params.quizCode,
+      params.packId,
+      params.packName,
+      quizCodeRecord.benfekName,
+      params.orderId,
+      params.paymentId,
+      params.paymentReference,
+      supplementSummaries.map((item) => item.line).join(', '),
+      aggregate.amount,
+      aggregate.costPrice,
+      1.3,
+      aggregate.tax,
+      aggregate.serviceCharge,
+      aggregate.hlsCommission,
+      aggregate.principalShare,
+      JSON.stringify({
+        packName: params.packName,
+        packId: params.packId,
+        benfekName: quizCodeRecord.benfekName,
+        items: supplementSummaries,
+      })
+    );
   }
 
   /**
@@ -56,15 +200,15 @@ export class PaystackController extends BaseController {
    *                     reference:
    *                       type: string
    */
-  async initializeCheckout(req: AuthenticatedRequest, res: Response) {
+  initializeCheckout = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const data: PaystackInitializeDTO = PaystackInitializeSchema.parse(req.body);
       const result = await PaystackService.initializeTransaction(data);
       return res.status(200).json(result);
     } catch (error: any) {
-      return res.status(400).json({ message: error?.message || 'Invalid payload.' });
+      return ResponseUtil.error(res, 'Please check your payment details and try again.', 400, error);
     }
-  }
+  };
 
   /**
    * @swagger
@@ -86,11 +230,11 @@ export class PaystackController extends BaseController {
    *       200:
    *         description: Paystack checkout initialized
    */
-  async checkoutFromCart(req: AuthenticatedRequest, res: Response) {
+  checkoutFromCart = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user.id;
       const email = req.user.email;
-      const { shippingAddress, notes } = req.body;
+      const { shippingAddress, notes, callbackUrl } = req.body;
 
       if (!userId || !email) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -102,8 +246,6 @@ export class PaystackController extends BaseController {
       }
 
       const total = await this.cartService.getCartTotal(cart);
-      
-      // Create order first (in pending state)
       const order = await this.orderRepository.createOrderFromCart(
         userId,
         cart.items,
@@ -111,30 +253,166 @@ export class PaystackController extends BaseController {
         shippingAddress
       );
 
-      const metadata = { 
+      const metadata = {
+        checkoutType: 'cart',
         orderId: order.id,
         orderNumber: (order as any).orderNumber,
-        cartId: cart.id, 
+        cartId: cart.id,
         userId,
-        notes 
+        notes: notes || null,
       };
 
       const result = await PaystackService.initializeTransaction({ 
         email, 
         amount: Math.round(total * 100), // Convert to kobo
-        metadata 
+        metadata,
+        callbackUrl,
+      });
+
+      await this.paystackRepository.upsertPaymentByOrderId({
+        userId,
+        orderId: order.id,
+        amount: total,
+        method: 'paystack',
+        status: 'pending',
+        paystackReference: result?.data?.reference,
+        currency: 'NGN',
+        metadata: JSON.stringify({
+          ...metadata,
+          checkoutInitializedAt: new Date().toISOString(),
+          paystackReference: result?.data?.reference || null,
+        }),
       });
 
       return res.status(200).json({
         ...result,
         orderId: order.id,
-        orderNumber: (order as any).orderNumber
+        orderNumber: (order as any).orderNumber,
       });
     } catch (error: any) {
       console.error('Checkout error:', error);
-      return res.status(500).json({ message: error?.response?.data?.message || 'Paystack checkout failed.' });
+      return ResponseUtil.error(res, 'Unable to start checkout right now. Please try again shortly.', 500, error);
     }
-  }
+  };
+
+  checkoutPack = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const email = req.user.email;
+
+      if (!userId || !email) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const data: PaystackPackCheckoutDTO = PaystackPackCheckoutSchema.parse(req.body);
+
+      const quizCodes = await this.prisma.quizCode.findMany({
+        where: { usedBy: userId, isUsed: true },
+        select: { code: true },
+      });
+
+      if (!quizCodes.length) {
+        return res.status(404).json({ message: 'No active benfek quiz code found for this account.' });
+      }
+
+      const pack = await this.prisma.researcherPack.findFirst({
+        where: {
+          packId: data.packId,
+          quizCode: { in: quizCodes.map((item) => item.code) },
+          status: 'dispatched',
+        },
+        include: {
+          items: {
+            include: {
+              supplement: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      if (!pack || pack.items.length === 0) {
+        return res.status(404).json({ message: 'Dispatched pack not found or has no payable supplements.' });
+      }
+
+      const total = pack.items.reduce(
+        (sum, item) => sum + Number(item.supplement.price) * Number(item.quantity || 1),
+        0
+      );
+      const totalQuantity = pack.items.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+
+      const order = await this.orderRepository.create({
+        userId,
+        total,
+        totalQuantity,
+        status: 'pending',
+        shippingAddress: data.shippingAddress,
+        notes: `Pack checkout for ${pack.packName}`,
+      });
+
+      await Promise.all(
+        pack.items.map((item) =>
+          this.orderRepository.addOrderItem({
+            orderId: order.id,
+            supplementId: item.supplementId,
+            quantity: item.quantity,
+            price: item.supplement.price,
+            productName: item.supplement.name,
+          })
+        )
+      );
+
+      const metadata = {
+        checkoutType: 'pack',
+        packId: pack.packId,
+        packName: pack.packName,
+        quizCode: pack.quizCode,
+        userId,
+        orderId: order.id,
+        orderNumber: (order as any).orderNumber,
+        shippingAddress: data.shippingAddress,
+      };
+
+      const result = await PaystackService.initializeTransaction({
+        email,
+        amount: Math.round(total * 100),
+        metadata,
+        callbackUrl: data.callbackUrl,
+      });
+
+      await this.paystackRepository.upsertPaymentByOrderId({
+        userId,
+        orderId: order.id,
+        amount: total,
+        method: 'paystack',
+        status: 'pending',
+        paystackReference: result?.data?.reference,
+        currency: 'NGN',
+        metadata: JSON.stringify({
+          ...metadata,
+          checkoutInitializedAt: new Date().toISOString(),
+          paystackReference: result?.data?.reference || null,
+        }),
+      });
+
+      return res.status(200).json({
+        ...result,
+        orderId: order.id,
+        orderNumber: (order as any).orderNumber,
+        packId: pack.packId,
+        packName: pack.packName,
+      });
+    } catch (error: any) {
+      console.error('Pack checkout error:', error);
+      return ResponseUtil.error(res, 'Unable to start pack checkout right now. Please try again shortly.', 500, error);
+    }
+  };
 
   /**
    * @swagger
@@ -152,79 +430,147 @@ export class PaystackController extends BaseController {
    *       200:
    *         description: Payment verified and order completed
    */
-  async verifyCheckout(req: AuthenticatedRequest, res: Response) {
+  verifyCheckout = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { reference } = req.params;
       if (!reference) {
         return res.status(400).json({ message: 'Reference is required.' });
       }
 
-      // Check if payment already processed
       const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference as string);
-      if (existingPayment) {
-        return res.status(200).json({ 
+      if (existingPayment && existingPayment.status !== 'pending') {
+        return res.status(200).json({
           message: 'Payment already processed.',
-          data: { status: existingPayment.status }
+          data: { status: existingPayment.status, orderId: existingPayment.orderId },
         });
       }
 
       const result = await PaystackService.verifyTransaction(reference as string);
       const userId = req.user.id;
+      const metadata = (result.data.metadata || {}) as Record<string, any>;
+      const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
 
       if (result.data.status === 'success') {
-        const metadata = result.data.metadata || {};
-        const orderId = metadata.orderId;
-
         if (!orderId) {
-          return res.status(400).json({ message: 'Order ID not found in payment metadata.' });
+          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
         }
 
-        // Update order status to paid
         await this.orderRepository.updateStatus(orderId, 'paid');
 
-        // Create payment record
-        await this.paystackRepository.savePayment({
+        const payment = await this.paystackRepository.upsertPaymentByOrderId({
           userId,
           orderId,
-          amount: result.data.amount / 100, // Convert from kobo to naira
+          amount: result.data.amount / 100,
           method: 'paystack',
           status: 'success',
           paystackReference: reference as string,
+          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
           paystackChannel: result.data.channel,
           currency: result.data.currency,
-          paidAt: new Date(result.data.paid_at),
-          metadata: JSON.stringify(metadata)
+          paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
+          metadata: JSON.stringify({
+            ...metadata,
+            verify: result.data,
+            paystackReference: reference,
+            paystackTransactionId: result.data.id ? String(result.data.id) : null,
+          }),
         });
 
-        // Get order items to decrement stock
-        const order = await this.orderRepository.findById(orderId);
-        if (order && order.items) {
-          for (const item of order.items) {
-            await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
+        if (metadata.checkoutType !== 'pack') {
+          const order = await this.orderRepository.findById(orderId);
+          if (order && order.items) {
+            for (const item of order.items) {
+              await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
+            }
+          }
+
+          try {
+            await this.cartService.clearCart(userId);
+          } catch (cartError: any) {
+            if (cartError?.message !== 'Cart not found') {
+              throw cartError;
+            }
           }
         }
 
-        // Clear the user's cart
-        await this.cartService.clearCart(userId);
+        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
+          await this.recordPrincipalCreditForPack({
+            orderId,
+            paymentId: payment.id,
+            paymentReference: reference as string,
+            packId: String(metadata.packId),
+            packName: String(metadata.packName),
+            quizCode: String(metadata.quizCode),
+          });
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          await this.notificationService.sendPaymentSuccessfulMessage({
+            phone: user.phone || undefined,
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+            amount: result.data.amount / 100,
+          });
+        }
 
         return res.status(200).json({
           status: true,
           message: 'Payment verified successfully',
-          data: {
-            orderId,
-            orderNumber: metadata.orderNumber,
-            amount: result.data.amount / 100,
-            status: 'success',
-            channel: result.data.channel
-          }
+            data: {
+              orderId,
+              orderNumber: metadata.orderNumber,
+              amount: result.data.amount / 100,
+              status: 'success',
+              channel: result.data.channel,
+              checkoutType: metadata.checkoutType || 'cart',
+              packId: metadata.packId || null,
+            packName: metadata.packName || null,
+            paystackReference: reference,
+            paystackTransactionId: result.data.id ? String(result.data.id) : null,
+          },
         });
       } else {
-        // Payment failed
-        const metadata = result.data.metadata || {};
-        const orderId = metadata.orderId;
+        if (!orderId) {
+          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
+        }
 
-        if (orderId) {
-          await this.orderRepository.updateStatus(orderId, 'failed');
+        await this.orderRepository.updateStatus(orderId, 'failed');
+        let storedMetadata: Record<string, any> = {};
+        if (existingPayment?.metadata) {
+          try {
+            storedMetadata = JSON.parse(existingPayment.metadata);
+          } catch {
+            storedMetadata = {};
+          }
+        }
+
+        await this.paystackRepository.upsertPaymentByOrderId({
+          userId,
+          orderId,
+          amount: result.data.amount ? result.data.amount / 100 : 0,
+          method: 'paystack',
+          status: 'failed',
+          paystackReference: reference as string,
+          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
+          paystackChannel: result.data.channel,
+          currency: result.data.currency || 'NGN',
+          metadata: JSON.stringify({
+            ...storedMetadata,
+            ...metadata,
+            verify: result.data,
+            paystackReference: reference,
+            paystackTransactionId: result.data.id ? String(result.data.id) : null,
+          }),
+        });
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (user) {
+          await this.notificationService.sendPaymentFailedMessage({
+            phone: user.phone || undefined,
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+          });
         }
 
         return res.status(400).json({
@@ -232,35 +578,14 @@ export class PaystackController extends BaseController {
           message: 'Payment verification failed',
           data: {
             status: result.data.status,
-            gateway_response: result.data.gateway_response
-          }
+            gateway_response: result.data.gateway_response,
+            checkoutType: metadata.checkoutType || 'cart',
+          },
         });
       }
     } catch (error: any) {
       console.error('Verification error:', error);
-      return res.status(500).json({ message: error?.response?.data?.message || 'Paystack verification failed.' });
+      return ResponseUtil.error(res, 'Unable to verify payment right now. Please try again shortly.', 500, error);
     }
-  }
+  };
 }
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     PaystackInitializeRequest:
- *       type: object
- *       required:
- *         - email
- *         - amount
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *         amount:
- *           type: number
- *           description: Amount in kobo (100 NGN = 10000)
- *         metadata:
- *           type: object
- *           additionalProperties: true
- *           description: Optional metadata for Paystack
- */

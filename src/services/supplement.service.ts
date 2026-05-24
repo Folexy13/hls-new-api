@@ -1,11 +1,22 @@
 import { injectable, inject } from 'inversify';
 import { CreateSupplementDTO, UpdateSupplementDTO } from '../DTOs/supplement.dto';
-import type { Supplement } from '.prisma/client';
+import { Prisma, type Supplement } from '@prisma/client';
 import { AppError } from '../utilities/errors';
 import { SupplementRepository } from '../repositories/supplement.repository';
 
 @injectable()
 export class SupplementService {  constructor(@inject(SupplementRepository) private supplementRepository: SupplementRepository) {}
+  private toNullableJson(value: unknown) {
+    if (value === undefined) return undefined;
+    if (value === null) return Prisma.DbNull;
+    return value as Prisma.InputJsonValue;
+  }
+
+  private toNullableDate(value?: string | null) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    return new Date(value);
+  }
   
   async findAll(page: number = 1, limit: number = 10, userId?: number): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
@@ -21,18 +32,33 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.findByUserId(userId);
   }
 
+  async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
+    return this.supplementRepository.findByNameAndBrand(name, brand);
+  }
+
   async create(userId: number, data: CreateSupplementDTO): Promise<Supplement> {
     return this.supplementRepository.create({
-      ...data,
+      name: data.name,
+      description: data.description,
+      price: data.price,
+      stock: data.stock,
       userId,
       imageUrl: data.imageUrl ?? null,
       category: data.category ?? null,
+      manufacturer: data.manufacturer ?? null,
+      strength: data.strength ?? null,
+      expiryDate: this.toNullableDate(data.expiryDate),
+      dosageForm: data.dosageForm ?? null,
+      budgetRange: data.budgetRange ?? null,
+      tags: this.toNullableJson(data.tags),
+      wholesalers: this.toNullableJson(data.wholesalers),
+      status: data.status ?? 'in_stock',
     });
   }
 
   async update(id: number, userId: number, data: UpdateSupplementDTO): Promise<Supplement> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -42,12 +68,27 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       throw new AppError('Unauthorized', 403);
     }
 
-    return this.supplementRepository.update(id, data);
+    return this.supplementRepository.update(id, {
+      name: data.name,
+      description: data.description,
+      price: data.price,
+      stock: data.stock,
+      imageUrl: data.imageUrl,
+      category: data.category,
+      manufacturer: data.manufacturer,
+      strength: data.strength,
+      expiryDate: this.toNullableDate(data.expiryDate),
+      dosageForm: data.dosageForm,
+      budgetRange: data.budgetRange,
+      tags: this.toNullableJson(data.tags),
+      wholesalers: this.toNullableJson(data.wholesalers),
+      status: data.status,
+    });
   }
 
   async delete(id: number, userId: number): Promise<void> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -68,7 +109,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
 
   async updateStock(id: number, quantity: number): Promise<Supplement> {
     const supplement = await this.findById(id);
-    
+
     if (!supplement) {
       throw new AppError('Supplement not found', 404);
     }
@@ -80,7 +121,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.updateStock(id, quantity);
   }
 
-  async search(query: string): Promise<Supplement[]> {
-    return this.supplementRepository.search(query);
+  async search(query: string, brand?: string): Promise<Supplement[]> {
+    return this.supplementRepository.search(query, brand);
   }
 }

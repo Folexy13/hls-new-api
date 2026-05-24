@@ -15,15 +15,47 @@ export class PrincipalRepository {
     firstName: string;
     lastName: string;
     phone?: string;
+    profileImageUrl?: string;
+    profession?: string;
+    currentPlaceOfWork?: string;
+    workCityAddress?: string;
+    licenseNumber?: string;
+    yearsOfExperience?: string;
+    referPharmacy?: boolean;
+    referredPharmacyName?: string | null;
+    referredPharmacyPhone?: string | null;
+    preferredPaymentMethod?: string;
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
   }): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
+        profileImageUrl: data.profileImageUrl,
+        profession: data.profession,
+        currentPlaceOfWork: data.currentPlaceOfWork,
+        workCityAddress: data.workCityAddress,
+        licenseNumber: data.licenseNumber,
+        yearsOfExperience: data.yearsOfExperience,
+        referPharmacy: data.referPharmacy ?? false,
+        referredPharmacyName: data.referredPharmacyName,
+        referredPharmacyPhone: data.referredPharmacyPhone,
+        preferredPaymentMethod: data.preferredPaymentMethod,
+        bankName: data.bankName,
+        accountNumber: data.accountNumber,
+        accountName: data.accountName,
         role: 'principal',
+        wallet: {
+          create: {
+            balance: 0,
+          },
+        },
       },
     });
   }
@@ -38,6 +70,7 @@ export class PrincipalRepository {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -74,6 +107,19 @@ export class PrincipalRepository {
       firstName: string;
       lastName: string;
       phone: string;
+      profileImageUrl: string;
+      profession: string;
+      currentPlaceOfWork: string;
+      workCityAddress: string;
+      licenseNumber: string;
+      yearsOfExperience: string;
+      referPharmacy: boolean;
+      referredPharmacyName: string | null;
+      referredPharmacyPhone: string | null;
+      preferredPaymentMethod: string;
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
     }>
   ): Promise<User> {
     return this.prisma.user.update({

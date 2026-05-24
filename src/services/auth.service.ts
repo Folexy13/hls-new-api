@@ -1,57 +1,65 @@
 import { injectable, inject } from "inversify";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { LoginUserDTO, RegisterUserDTO } from "../DTOs/auth.dto";
+import { PrismaClient } from "@prisma/client";
+import { LoginUserDTO, RegisterUserDTO, RegisterBenfekDTO, RegisterUnreferredBenfekDTO } from "../DTOs/auth.dto";
 import AuthRepositoryImpl from "../repositories/auth.repo";
-import { UnauthorizedError } from "../utilities/errors";
+import { ConflictError, UnauthorizedError, NotFoundError } from "../utilities/errors";
 import { config } from "../config/config";
+import { NotificationService } from "../services/notification.service";
+import { EmailService } from "./email.service";
+import crypto from "crypto";
+import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 
 @injectable()
 export class AuthService {
   constructor(
-    @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl
+    @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
+    @inject('PrismaClient') private prisma: PrismaClient,
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {}
 
   async register(data: RegisterUserDTO) {
-    const existingUser = await this.authRepository.findUserByEmail(data.email);
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.authRepository.findUserByEmail(email);
     if (existingUser) {
-      throw new Error("User already exists");
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    if (phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(phone);
+      if (existingPhone) {
+        throw new ConflictError("Phone number is already registered.");
+      }
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
       ...data,
+      email,
+      phone: phone || undefined,
       password: hashedPassword,
     });
 
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return this.createAuthResponse(user);
   }
 
   async login(data: LoginUserDTO) {
-    const user = await this.authRepository.findUserByEmail(data.email);
+    const user = await this.authRepository.findUserByEmail(normalizeEmail(data.email));
     if (!user) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError("Invalid email or password.");
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError("Invalid email or password.");
     }
 
-    const accessToken = this.generateAccessToken(user);
-    const refreshToken = this.generateRefreshToken(user);
+    await this.notificationService.notifyPreferredVendorAcceptance(user).catch(() => undefined);
 
-    await this.authRepository.saveRefreshToken(user.id, refreshToken);
-
-    const { password, ...userWithoutPassword } = user;
-    return {
-      user: userWithoutPassword,
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
-    };
+    return this.createAuthResponse(user);
   }
 
   async refreshToken(refreshToken: string) {
@@ -76,6 +84,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        researcherType: (user as any).researcherType ?? null,
       },
       tokens: {
         accessToken: newAccessToken,
@@ -88,9 +97,150 @@ export class AuthService {
     await this.authRepository.invalidateRefreshToken(refreshToken);
   }
 
+  async forgotPassword(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.authRepository.findUserByEmail(normalizedEmail);
+    if (!user) {
+      throw new NotFoundError("User with this email does not exist.");
+    }
+    
+    // Invalidate existing tokens first by updating the password slightly, or relying on something bound to the current state.
+    // However, generating a one-time token bound to the current password hash works best.
+    const secret = config.jwtSecret + user.password; // Token becomes invalid immediately if password is changed
+
+    // Generate magic link token (short-lived JWT - 15 minutes max)
+    const resetToken = jwt.sign(
+      { userId: user.id },
+      secret,
+      { expiresIn: "15m" }
+    );
+    
+    // Send email using EmailService
+    await this.emailService.sendMagicLink(normalizedEmail, resetToken);
+  }
+
+  async resetPassword(token: string, newPassword?: string) {
+    // We decode first without verifying to get the userId, so we can fetch the user's current password hash
+    const decodedUnverified = jwt.decode(token) as { userId: number } | null;
+    if (!decodedUnverified || !decodedUnverified.userId) {
+      throw new UnauthorizedError("Invalid reset token.");
+    }
+
+    const user = await this.authRepository.findUserById(decodedUnverified.userId);
+    if (!user) {
+      throw new UnauthorizedError("User not found.");
+    }
+
+    const secret = config.jwtSecret + user.password;
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch (e) {
+      throw new UnauthorizedError("Invalid, expired, or already used reset token.");
+    }
+
+    if (newPassword) {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.authRepository.updateUserPassword(user.id, hashedPassword);
+    }
+    
+    // Return a fresh set of tokens if they clicked the magic link to just login
+    return this.createAuthResponse(user);
+  }
+
+  async registerBenfek(data: RegisterBenfekDTO) {
+    const email = normalizeEmail(data.email);
+    const existingUser = await this.authRepository.findUserByEmail(email);
+    if (existingUser) {
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    const existingUsername = await this.authRepository.findUserByUsername(data.username);
+    if (existingUsername) {
+      throw new ConflictError("Username is already taken.");
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await this.authRepository.createUser({
+      email,
+      username: data.username,
+      password: hashedPassword,
+      firstName: data.username,
+      lastName: data.username,
+      role: "benfek"
+    });
+
+    return this.createAuthResponse(user);
+  }
+
+  async registerUnreferredBenfek(data: RegisterUnreferredBenfekDTO) {
+    const email = normalizeEmail(data.email);
+    const phone = normalizePhone(data.phone);
+    const existingUser = await this.authRepository.findUserByEmail(email);
+    if (existingUser) {
+      throw new ConflictError("Email address is already registered.");
+    }
+
+    if (phone) {
+      const existingPhone = await this.authRepository.findUserByPhone(phone);
+      if (existingPhone) {
+        throw new ConflictError("Phone number is already registered.");
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await this.authRepository.createUser({
+      email,
+      username: email,
+      password: hashedPassword,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: phone || undefined,
+      role: "benfek"
+    });
+
+    if (data.quizCode) {
+      await this.prisma.quizCode.updateMany({
+        where: {
+          code: data.quizCode,
+          isUsed: true,
+          OR: [{ usedBy: null }, { usedBy: user.id }],
+        },
+        data: {
+          usedBy: user.id,
+          usedAt: new Date(),
+        },
+      });
+    }
+
+    return this.createAuthResponse(user);
+  }
+
+  private async createAuthResponse(user: any) {
+    const accessToken = this.generateAccessToken(user);
+    const refreshToken = this.generateRefreshToken(user);
+
+    await this.authRepository.saveRefreshToken(user.id, refreshToken);
+
+    const { password, ...userWithoutPassword } = user;
+    return {
+      user: userWithoutPassword,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
+    };
+  }
+
   private generateAccessToken(user: any): string {
     return jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        researcherType: user.researcherType ?? null,
+      },
       config.jwtSecret,
       { expiresIn: "15m" }
     );
@@ -104,3 +254,5 @@ export class AuthService {
     );
   }
 }
+
+

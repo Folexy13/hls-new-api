@@ -10,6 +10,9 @@ import { createPaystackRoutes } from './paystack.routes';
 import { createNutrientTypeRoutes } from './nutrienttype.routes';
 import { createQuizCodeRoutes } from './quizcode.routes';
 import { createPrincipalRoutes } from './principal.routes';
+import { createResearcherRoutes } from './researcher.routes';
+import { createBenfekRoutes } from './benfek.routes';
+import { createContentRoutes } from './content.routes';
 
 export const createRoutes = (container: Container): Router => {
   const router = Router();
@@ -40,6 +43,11 @@ export const createRoutes = (container: Container): Router => {
   router.use('/quiz-code', createQuizCodeRoutes(container));
   // Mount principal routes
   router.use('/principals', createPrincipalRoutes(container));
+  // Mount researcher routes
+  router.use('/researcher', createResearcherRoutes(container));
+  // Mount benfek routes
+  router.use('/benfek', createBenfekRoutes(container));
+  router.use('/content', createContentRoutes(container));
 
   return router;
 };

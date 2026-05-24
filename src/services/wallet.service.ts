@@ -3,6 +3,7 @@ import { WalletRepository } from '../repositories/wallet.repository';
 import { WithdrawalRepository } from '../repositories/withdrawal.repository';
 import { WithdrawalDTO } from '../DTOs/wallet.dto';
 import { Role } from '../types/auth.types';
+import { PaystackService } from './paystack.service';
 
 // Define wallet and withdrawal types
 interface Wallet {
@@ -23,6 +24,8 @@ interface Withdrawal {
   bankName: string;
   accountNumber: string;
   accountName: string;
+  transferReference: string | null;
+  transferRecipientCode: string | null;
   month: number;
   year: number;
   wallet?: Wallet;
@@ -98,12 +101,48 @@ export class WalletService {
       userId,
       walletId,
       status: 'pending',
+      transferReference: null,
+      transferRecipientCode: null,
       month,
       year
     });
 
     // Debit wallet
     await this.debitWallet(walletId, data.amount);
+
+    try {
+      const bankCode = await PaystackService.resolveBankCode(data.bankName);
+      const recipient = await PaystackService.createTransferRecipient({
+        name: data.accountName,
+        accountNumber: data.accountNumber,
+        bankCode,
+      });
+
+      const recipientCode = recipient?.data?.recipient_code;
+      if (!recipientCode) {
+        throw new Error('Paystack recipient code was not returned');
+      }
+
+      const transfer = await PaystackService.initiateTransfer({
+        amount: data.amount,
+        recipient: recipientCode,
+        reason: `Principal withdrawal for user ${userId}`,
+      });
+
+      const transferReference = transfer?.data?.reference || transfer?.data?.transfer_code || null;
+
+      return await this.withdrawalRepository.update(withdrawal.id, {
+        status: 'processing' as any,
+        transferReference: transferReference || null,
+        transferRecipientCode: recipientCode,
+      } as any);
+    } catch (error) {
+      await this.creditWallet(walletId, data.amount);
+      await this.withdrawalRepository.update(withdrawal.id, {
+        status: 'failed' as any,
+      } as any);
+      throw error;
+    }
 
     return withdrawal;
   }

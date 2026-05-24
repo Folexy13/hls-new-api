@@ -29,12 +29,14 @@ export class AuthGuard {
           userId: number;
           role: string;
           email: string;
+          researcherType?: string | null;
         };
         console.log('Token verified successfully for user:', decoded.userId);
         (req as AuthenticatedRequest).user = {
           id: decoded.userId,
           role: decoded.role as Role,
           email: decoded.email,
+          researcherType: (decoded.researcherType as any) ?? null,
         };
 
         next();

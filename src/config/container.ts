@@ -31,6 +31,12 @@ import { QuizCodeController } from '../controllers/quizcode.controller';
 import { PrincipalRepository } from '../repositories/principal.repository';
 import { PrincipalService } from '../services/principal.service';
 import { PrincipalController } from '../controllers/principal.controller';
+import { ResearcherController } from '../controllers/researcher.controller';
+import { BenfekController } from '../controllers/benfek.controller';
+import { ContentController } from '../controllers/content.controller';
+import { NotificationService } from '../services/notification.service';
+import { OneSignalService } from '../services/onesignal.service';
+import { EmailService } from '../services/email.service';
 
 const container = new Container();
 
@@ -39,7 +45,7 @@ container.bind<Container>(Container).toConstantValue(container);
 
 // Initialize PrismaClient
 const prisma = new PrismaClient();
-container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma);
+container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma as any);
 
 // Bind repositories
 container.bind<NutrientTypeRepository>(NutrientTypeRepository).toSelf();
@@ -66,7 +72,10 @@ container.bind<WalletService>(WalletService).toSelf();
 container.bind<PodcastService>(PodcastService).toSelf();
 container.bind<CartService>(CartService).toSelf();
 container.bind<SupplementService>(SupplementService).toSelf();
+container.bind<NotificationService>(NotificationService).toSelf();
 container.bind<PrincipalService>(PrincipalService).toSelf();
+container.bind<OneSignalService>(OneSignalService).toSelf();
+container.bind<EmailService>(EmailService).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();
@@ -79,5 +88,8 @@ container.bind<SupplementController>(SupplementController).toSelf();
 container.bind<PaystackController>(PaystackController).toSelf();
 container.bind<QuizCodeController>(QuizCodeController).toSelf();
 container.bind<PrincipalController>(PrincipalController).toSelf();
+container.bind<ResearcherController>(ResearcherController).toSelf();
+container.bind<BenfekController>(BenfekController).toSelf();
+container.bind<ContentController>(ContentController).toSelf();
 
 export { container };

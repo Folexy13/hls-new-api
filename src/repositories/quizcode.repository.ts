@@ -1,15 +1,23 @@
 import { PrismaClient, QuizCode } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { injectable, inject } from 'inversify';
-import { v4 as uuidv4 } from 'uuid';
+import { ConflictError } from '../utilities/errors';
+import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
 export interface CreateQuizCodeDTO {
   createdBy: number;
   benfekName: string;
+  benfekEmail: string;
   benfekPhone: string;
-  allergies?: string;
-  scares?: string;
-  familyCondition?: string;
-  medications?: string;
+  benfekAge: string;
+  benfekGender: string;
+  benfekWeight: string;
+  benfekHeight: string;
+  allergies?: string[];
+  scares?: string[];
+  familyCondition?: string[];
+  medications?: string[];
+  currentConditions?: string[];
   hasCurrentCondition?: boolean;
   expiresAt?: Date;
 }
@@ -47,20 +55,57 @@ export class QuizCodeRepository {
    */
   async create(data: CreateQuizCodeDTO): Promise<QuizCode> {
     const code = this.generateCode();
-    
+    const benfekEmail = normalizeEmail(data.benfekEmail);
+    const benfekPhone = normalizePhone(data.benfekPhone);
+
+    const existing = await this.findExistingBenfekContact(benfekEmail, benfekPhone);
+    if (existing) {
+      const contactType = normalizePhone(existing.benfekPhone) === benfekPhone ? 'phone number' : 'email address';
+      const message = existing.isUsed
+        ? `This Benfek has already registered with this ${contactType}. Please use the existing registered profile.`
+        : `A quiz code already exists for this Benfek ${contactType}. Please use the existing code instead.`;
+
+      throw new ConflictError(message);
+    }
+
     return this.prisma.quizCode.create({
       data: {
         code,
         createdBy: data.createdBy,
         benfekName: data.benfekName,
-        benfekPhone: data.benfekPhone,
-        allergies: data.allergies,
-        scares: data.scares,
-        familyCondition: data.familyCondition,
-        medications: data.medications,
+        benfekEmail,
+        benfekPhone,
+        benfekAge: data.benfekAge,
+        benfekGender: data.benfekGender,
+        basicWeight: data.benfekWeight,
+        basicHeight: data.benfekHeight,
+        allergies: (data.allergies as unknown as Prisma.InputJsonValue | undefined),
+        scares: (data.scares as unknown as Prisma.InputJsonValue | undefined),
+        familyCondition: (data.familyCondition as unknown as Prisma.InputJsonValue | undefined),
+        medications: (data.medications as unknown as Prisma.InputJsonValue | undefined),
+        currentConditions: (data.currentConditions as unknown as Prisma.InputJsonValue | undefined),
         hasCurrentCondition: data.hasCurrentCondition || false,
         expiresAt: data.expiresAt,
-      },
+      } as any,
+    });
+  }
+
+  async findExistingBenfekContact(benfekEmail?: string, benfekPhone?: string): Promise<QuizCode | null> {
+    const conditions = [
+      ...(benfekEmail ? [{ benfekEmail }] : []),
+      ...getPhoneSearchVariants(benfekPhone).map((phone) => ({ benfekPhone: phone })),
+    ];
+
+    if (!conditions.length) return null;
+
+    return this.prisma.quizCode.findFirst({
+      where: { OR: conditions },
+      orderBy: [
+        { isUsed: 'desc' },
+        { usedAt: 'desc' },
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
     });
   }
 
@@ -111,12 +156,47 @@ export class QuizCodeRepository {
   /**
    * Mark a quiz code as used
    */
-  async markAsUsed(code: string, userId: number): Promise<QuizCode> {
+  async markAsUsed(code: string, userId?: number | null): Promise<QuizCode> {
     return this.prisma.quizCode.update({
       where: { code },
       data: {
         isUsed: true,
-        usedBy: userId,
+        usedBy: userId ?? null,
+        usedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Save benfek quiz answers and mark as used (public completion flow)
+   */
+  async completeBenfekQuiz(
+    code: string,
+    data: {
+      basicNickname?: string;
+      basicWeight?: string;
+      basicHeight?: string;
+      lifestyleHabits: string;
+      lifestyleFun: string;
+      lifestyleDesires: string;
+      lifestylePriority: string;
+      preferenceDrugForm: string;
+      preferenceBudget: number;
+    }
+  ): Promise<QuizCode> {
+    return this.prisma.quizCode.update({
+      where: { code },
+      data: {
+        basicNickname: data.basicNickname,
+        ...(data.basicWeight ? { basicWeight: data.basicWeight } : {}),
+        ...(data.basicHeight ? { basicHeight: data.basicHeight } : {}),
+        lifestyleHabits: data.lifestyleHabits,
+        lifestyleFun: data.lifestyleFun,
+        lifestyleDesires: data.lifestyleDesires,
+        lifestylePriority: data.lifestylePriority,
+        preferenceDrugForm: data.preferenceDrugForm,
+        preferenceBudget: data.preferenceBudget,
+        isUsed: true,
         usedAt: new Date(),
       },
     });
@@ -154,17 +234,56 @@ export class QuizCodeRepository {
       where.benfekName = { contains: benfekName };
     }
 
-    const [codes, total] = await Promise.all([
-      this.prisma.quizCode.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: skip || 0,
-        take: take || 50,
-      }), 
-      this.prisma.quizCode.count({ where }),
-    ]);
+    const allCodes = await this.prisma.quizCode.findMany({
+      where,
+      orderBy: [
+        { isUsed: 'desc' },
+        { usedAt: 'desc' },
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+    });
+    const deduped = this.dedupeBenfeksByContact(allCodes);
+    const start = skip || 0;
+    const end = start + (take || 50);
 
-    return { codes, total };
+    return { codes: deduped.slice(start, end), total: deduped.length };
+  }
+
+  private dedupeBenfeksByContact(codes: QuizCode[]): QuizCode[] {
+    const byContact = new Map<string, QuizCode>();
+    const result: QuizCode[] = [];
+
+    for (const code of codes) {
+      const contactKey = normalizePhone(code.benfekPhone) || normalizeEmail(code.benfekEmail) || `id:${code.id}`;
+      const existing = byContact.get(contactKey);
+
+      if (!existing) {
+        byContact.set(contactKey, code);
+        result.push(code);
+        continue;
+      }
+
+      if (this.shouldPrioritizeBenfek(code, existing)) {
+        byContact.set(contactKey, code);
+        const index = result.findIndex((item) => item.id === existing.id);
+        if (index >= 0) result[index] = code;
+      }
+    }
+
+    return result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  private shouldPrioritizeBenfek(candidate: QuizCode, current: QuizCode): boolean {
+    if (candidate.isUsed !== current.isUsed) return candidate.isUsed;
+
+    const candidateTime = candidate.usedAt || candidate.createdAt;
+    const currentTime = current.usedAt || current.createdAt;
+    if (candidateTime.getTime() !== currentTime.getTime()) {
+      return candidateTime.getTime() > currentTime.getTime();
+    }
+
+    return candidate.id > current.id;
   }
 
   /**
@@ -199,6 +318,33 @@ export class QuizCodeRepository {
   async delete(id: number): Promise<QuizCode> {
     return this.prisma.quizCode.delete({
       where: { id },
+    });
+  }
+
+  /**
+   * Update benfek health details
+   */
+  async updateBenfekHealthDetails(
+    id: number,
+    data: {
+      allergies?: string[];
+      scares?: string[];
+      familyCondition?: string[];
+      medications?: string[];
+      currentConditions?: string[];
+      hasCurrentCondition?: boolean;
+    }
+  ): Promise<QuizCode> {
+    return this.prisma.quizCode.update({
+      where: { id },
+      data: {
+        allergies: data.allergies !== undefined ? (data.allergies as unknown as Prisma.InputJsonValue | undefined) : undefined,
+        scares: data.scares !== undefined ? (data.scares as unknown as Prisma.InputJsonValue | undefined) : undefined,
+        familyCondition: data.familyCondition !== undefined ? (data.familyCondition as unknown as Prisma.InputJsonValue | undefined) : undefined,
+        medications: data.medications !== undefined ? (data.medications as unknown as Prisma.InputJsonValue | undefined) : undefined,
+        currentConditions: data.currentConditions !== undefined ? (data.currentConditions as unknown as Prisma.InputJsonValue | undefined) : undefined,
+        hasCurrentCondition: data.hasCurrentCondition !== undefined ? data.hasCurrentCondition : undefined,
+      },
     });
   }
 }

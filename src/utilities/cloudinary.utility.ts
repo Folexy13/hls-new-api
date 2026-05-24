@@ -3,6 +3,11 @@ import { Readable } from 'stream';
 import { config } from '../config/config';
 
 // Configure Cloudinary
+console.log('Configuring Cloudinary with:', {
+  cloud_name: config.cloudinary.cloudName,
+  api_key: config.cloudinary.apiKey ? '***' + config.cloudinary.apiKey.slice(-4) : 'MISSING',
+});
+
 cloudinary.config({
   cloud_name: config.cloudinary.cloudName,
   api_key: config.cloudinary.apiKey,
@@ -24,46 +29,42 @@ export class CloudinaryService {
    * @param folder Folder name in Cloudinary
    * @returns Upload result with URL and public ID
    */
-  async uploadFile(
-    file: Express.Multer.File,
-    folder: string = 'supplements'
-  ): Promise<CloudinaryUploadResult> {
-    return new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: 'auto',
-          timeout: 60000, // 60 seconds timeout
-          transformation: [
-            { width: 800, height: 800, crop: 'limit' },
-            { quality: 'auto:good' },
-            { fetch_format: 'auto' },
-          ],
-        },
-        (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
-          if (error) {
-            reject(new Error(`Cloudinary upload failed: ${error.message}`));
-          } else if (result) {
-            resolve({
-              url: result.secure_url,
-              publicId: result.public_id,
-              width: result.width,
-              height: result.height,
-              format: result.format,
-            });
-          } else {
-            reject(new Error('Cloudinary upload failed: No result returned'));
-          }
-        }
-      );
+ async uploadFile(
+  file: Express.Multer.File,
+  folder: string = 'supplements'
+): Promise<CloudinaryUploadResult> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: 'auto',
+        transformation: [
+          { width: 800, height: 800, crop: 'limit' },
+          { quality: 'auto:good' },
+          { fetch_format: 'auto' },
+        ],
+      },
+      (error, result) => {
+        if (error) return reject(new Error(`Cloudinary error: ${error.message}`));
+        if (!result) return reject(new Error('Upload failed: No result from Cloudinary'));
+        
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          width: result.width,
+          height: result.height,
+          format: result.format,
+        });
+      }
+    );
 
-      // Convert buffer to stream and pipe to upload
-      const bufferStream = new Readable();
-      bufferStream.push(file.buffer);
-      bufferStream.push(null);
-      bufferStream.pipe(uploadStream);
-    });
-  }
+    // Pipe the buffer into the upload stream
+    const readableStream = new Readable();
+    readableStream.push(file.buffer);
+    readableStream.push(null);
+    readableStream.pipe(uploadStream);
+  });
+}
 
   /**
    * Upload a base64 encoded image to Cloudinary

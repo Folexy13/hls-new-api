@@ -2,15 +2,21 @@ import { Request, RequestHandler, Response } from 'express';
 import { injectable, inject } from 'inversify';
 import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
+import { NotificationService } from '../services/notification.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
-import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema } from '../DTOs/quiz.dto';
+import { PrismaClient } from '@prisma/client';
+import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
+import { formatHealthField } from '../utilities/health-field.utility';
+import { AppError } from '../utilities/errors';
 
 @injectable()
 export class QuizCodeController extends BaseController {
   constructor(
     container: Container,
-    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository
+    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
+    @inject('PrismaClient') private prisma: PrismaClient,
+    @inject(NotificationService) private notificationService: NotificationService
   ) {
     super(container);
   }
@@ -72,18 +78,36 @@ export class QuizCodeController extends BaseController {
       const quizCode = await this.quizCodeRepository.create({
         createdBy: user.id,
         benfekName: data.benfekName,
+        benfekEmail: data.benfekEmail,
         benfekPhone: data.benfekPhone,
+        benfekAge: data.benfekAge,
+        benfekGender: data.benfekGender,
+        benfekWeight: data.benfekWeight,
+        benfekHeight: data.benfekHeight,
         allergies: data.allergies,
         scares: data.scares,
         familyCondition: data.familyCondition,
         medications: data.medications,
-        hasCurrentCondition: data.hasCurrentCondition,
+        currentConditions: data.currentConditions,
+        hasCurrentCondition: data.hasCurrentCondition ?? Boolean(data.currentConditions?.length),
       });
+
+      await this.notificationService
+        .sendBenfekCodeMessage({
+          phone: data.benfekPhone,
+          code: quizCode.code,
+          benfekName: data.benfekName,
+        })
+        .catch(() => undefined);
 
       ResponseUtil.success(res, quizCode, 'Quiz code created successfully', 201);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      if (error instanceof AppError) {
+        ResponseUtil.error(res, error.message, error.statusCode, error);
         return;
       }
       ResponseUtil.error(res, 'Failed to create quiz code', 500, error);
@@ -128,7 +152,12 @@ export class QuizCodeController extends BaseController {
       const quizCodeData = result.quizCode ? {
         code: result.quizCode.code,
         benfekName: result.quizCode.benfekName,
+        benfekEmail: result.quizCode.benfekEmail,
         benfekPhone: result.quizCode.benfekPhone,
+        benfekAge: result.quizCode.benfekAge,
+        benfekGender: result.quizCode.benfekGender,
+        benfekWeight: result.quizCode.basicWeight,
+        benfekHeight: result.quizCode.basicHeight,
         createdBy: {
           firstName: result.quizCode.creator.firstName,
           lastName: result.quizCode.creator.lastName,
@@ -142,6 +171,221 @@ export class QuizCodeController extends BaseController {
         return;
       }
       ResponseUtil.error(res, 'Failed to validate quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/verify-benfek:
+   *   post:
+   *     summary: Verify a benfek quiz code (Public)
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Benfek quiz code verified
+   *       400:
+   *         description: Validation error
+   */
+  verifyBenfekQuizCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
+      const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!result.valid || !result.quizCode) {
+        ResponseUtil.error(res, result.message, 400);
+        return;
+      }
+
+      const quizCode = result.quizCode;
+      const data = {
+        code: quizCode.code,
+        benfekName: quizCode.benfekName,
+        benfekEmail: quizCode.benfekEmail,
+        benfekPhone: quizCode.benfekPhone,
+        benfekAge: quizCode.benfekAge,
+        benfekGender: quizCode.benfekGender,
+        benfekWeight: quizCode.basicWeight,
+        benfekHeight: quizCode.basicHeight,
+        registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
+        usedAt: quizCode.usedAt
+      };
+
+      ResponseUtil.success(res, data, 'Benfek quiz code verified');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to verify benfek quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/benfek-quiz:
+   *   post:
+   *     summary: Get quiz payload for a benfek by quiz code (Public)
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *             properties:
+   *               code:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Quiz payload returned
+   *       400:
+   *         description: Validation error
+   */
+  getBenfekQuizByCodePublic: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { code } = ValidateQuizCodeSchema.parse(req.body);
+      const result = await this.quizCodeRepository.validateCode(code.toUpperCase());
+
+      if (!result.valid || !result.quizCode) {
+        ResponseUtil.error(res, result.message, 400);
+        return;
+      }
+
+      const quizCode = result.quizCode;
+      const payload = {
+        code: quizCode.code,
+        benfekName: quizCode.benfekName,
+        benfekEmail: quizCode.benfekEmail,
+        benfekPhone: quizCode.benfekPhone,
+        benfekWeight: quizCode.basicWeight,
+        benfekHeight: quizCode.basicHeight,
+        benfekAge: (quizCode as any).benfekAge,
+        benfekGender: (quizCode as any).benfekGender,
+        registrationStatus: quizCode.isUsed ? 'registered' : 'not_registered',
+        quizFields: {
+          basics: ['nickname', 'weight', 'height'],
+          lifestyle: ['habits', 'funActivities', 'priority'],
+          preferences: ['drugForm', 'budget']
+        }
+      };
+
+      ResponseUtil.success(res, payload, 'Quiz payload retrieved');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to retrieve quiz payload', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/complete:
+   *   post:
+   *     summary: Complete benfek quiz and register
+   *     tags: [QuizCode]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - code
+   *               - basics
+   *               - lifestyle
+   *               - preferences
+   *             properties:
+   *               code:
+   *                 type: string
+   *               basics:
+   *                 type: object
+   *                 required: [weight, height]
+   *                 properties:
+   *                   nickname:
+   *                     type: string
+   *                   weight:
+   *                     type: string
+   *                   height:
+   *                     type: string
+   *               lifestyle:
+   *                 type: object
+   *                 required: [habits, funActivities, priority]
+   *                 properties:
+   *                   habits:
+   *                     type: string
+   *                   funActivities:
+   *                     type: string
+   *                   priority:
+   *                     type: string
+   *               preferences:
+   *                 type: object
+   *                 required: [drugForm, budget]
+   *                 properties:
+   *                   drugForm:
+   *                     type: string
+   *                   budget:
+   *                     type: number
+   *     responses:
+   *       200:
+   *         description: Quiz completed successfully
+   *       400:
+   *         description: Validation error
+   */
+  completeBenfekQuiz: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const data = CompleteBenfekQuizSchema.parse(req.body);
+      const quizCode = await this.quizCodeRepository.findByCode(data.code.toUpperCase());
+      if (!quizCode) {
+        ResponseUtil.error(res, 'Quiz code not found', 400);
+        return;
+      }
+
+      const updated = await this.quizCodeRepository.completeBenfekQuiz(data.code.toUpperCase(), {
+        basicNickname: data.basics.nickname,
+        basicWeight: data.basics.weight || quizCode.basicWeight || undefined,
+        basicHeight: data.basics.height || quizCode.basicHeight || undefined,
+        lifestyleHabits: data.lifestyle.habits,
+        lifestyleFun: data.lifestyle.funActivities,
+        lifestyleDesires: data.lifestyle.desires,
+        lifestylePriority: data.lifestyle.priority,
+        preferenceDrugForm: data.preferences.drugForm,
+        preferenceBudget: data.preferences.budget,
+      });
+
+      // Send assessment completed notification if benfek user is associated
+      if (quizCode.usedBy) {
+        const benfek = await this.prisma.user.findUnique({ where: { id: quizCode.usedBy } });
+        if (benfek) {
+          await this.notificationService.sendAssessmentCompletedMessage({
+            phone: benfek.phone || undefined,
+            email: benfek.email,
+            benfekName: benfek.firstName || data.basics.nickname || 'Benfek'
+          });
+        }
+      }
+
+      ResponseUtil.success(res, { quizCode: updated }, 'Quiz completed successfully');
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        ResponseUtil.error(res, 'Validation failed', 400, error);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to complete quiz', 500, error);
     }
   };
 
@@ -308,11 +552,12 @@ export class QuizCodeController extends BaseController {
         registrationStatus: code.isUsed ? 'registered' : 'not_registered',
         usedAt: code.usedAt,
         createdAt: code.createdAt,
-        allergies: code.allergies,
-        scares: code.scares,
-        familyCondition: code.familyCondition,
-        medications: code.medications,
+        allergies: formatHealthField(code.allergies),
+        scares: formatHealthField(code.scares),
+        familyCondition: formatHealthField(code.familyCondition),
+        medications: formatHealthField(code.medications),
         hasCurrentCondition: code.hasCurrentCondition,
+        currentConditions: (code as any).currentConditions ?? undefined,
       }));
 
       ResponseUtil.success(res, {
@@ -399,19 +644,103 @@ export class QuizCodeController extends BaseController {
   deleteQuizCode: RequestHandler = async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
-      
+
       if (user.role !== 'principal') {
         ResponseUtil.error(res, 'Only principals can delete quiz codes', 403);
         return;
       }
 
       const id = parseInt(req.params.id as any);
-      
+
       await this.quizCodeRepository.delete(id);
 
       ResponseUtil.success(res, null, 'Quiz code deleted successfully');
     } catch (error: any) {
       ResponseUtil.error(res, 'Failed to delete quiz code', 500, error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v2/quiz-code/{id}:
+   *   put:
+   *     summary: Update a benfek's health details (Principal only)
+   *     tags: [QuizCode]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               allergies:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               scares:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               familyCondition:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               medications:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               currentConditions:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               hasCurrentCondition:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Benfek health details updated successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: Quiz code not found
+   */
+  updateBenfekHealthDetails: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can update benfek details', 403);
+        return;
+      }
+
+      const id = parseInt(req.params.id as any);
+      const { allergies, scares, familyCondition, medications, currentConditions, hasCurrentCondition } = req.body;
+
+      const updated = await this.quizCodeRepository.updateBenfekHealthDetails(id, {
+        allergies,
+        scares,
+        familyCondition,
+        medications,
+        currentConditions,
+        hasCurrentCondition,
+      });
+
+      ResponseUtil.success(res, updated, 'Benfek health details updated successfully');
+    } catch (error: any) {
+      if (error.code === 'P2025') {
+        ResponseUtil.error(res, 'Quiz code not found', 404);
+        return;
+      }
+      ResponseUtil.error(res, 'Failed to update benfek details', 500, error);
     }
   };
 }

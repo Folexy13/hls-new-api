@@ -3,26 +3,77 @@ import { PrismaClient, User } from '@prisma/client';
 import { injectable, inject } from 'inversify';
 import { RegisterUserDTO } from '../DTOs/auth.dto';
 import { AuthRepository } from './Abstractions/authrepo';
+import { getPhoneSearchVariants } from '../utilities/contact-normalizer.utility';
 
 @injectable()
 export default class AuthRepositoryImpl implements AuthRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
-  async createUser(data: RegisterUserDTO): Promise<User> {
+  async createUser(
+    data: RegisterUserDTO & {
+      username?: string;
+      phone?: string | null;
+      researcherType?: "maker" | "checker" | null;
+    }
+  ): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,
+        username: (data as any).username ?? data.email,
         password: data.password, // Note: Password should be hashed before storage
         firstName: data.firstName,
         lastName: data.lastName,
-        role: data.role || 'benfek'
-      }
+        phone: data.phone ?? null,
+        role: data.role || 'benfek',
+        researcherType:
+          data.role === "researcher"
+            ? (data.researcherType ?? "maker")
+            : null,
+        ...(data.role === 'principal'
+          ? {
+              wallet: {
+                create: {
+                  balance: 0,
+                },
+              },
+            }
+          : {}),
+      } as any
     });
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email }
+    });
+  }
+
+  async findUserById(id: number): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { id }
+    });
+  }
+
+  async updateUserPassword(id: number, password: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { password }
+    });
+  }
+
+  async findUserByUsername(username: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { username }
+    });
+  }
+
+  async findUserByPhone(phone: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: {
+        phone: {
+          in: getPhoneSearchVariants(phone),
+        },
+      },
     });
   }
 
