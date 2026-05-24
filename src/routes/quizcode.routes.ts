@@ -12,6 +12,9 @@ export const createQuizCodeRoutes = (container: Container): Router => {
   router.post('/validate', quizCodeController.validateQuizCode);
 
   // Protected routes - require authentication
+  router.post('/use', authGuard.verify(), quizCodeController.useQuizCode);
+  router.get('/benfeks', authGuard.verify(), quizCodeController.getMyBenfeks);
+  router.get('/benfeks/:code', authGuard.verify(), quizCodeController.getBenfekQuizByCode);
   router.post('/create', authGuard.verify(), quizCodeController.createQuizCode);
   router.get('/my-codes', authGuard.verify(), quizCodeController.getMyQuizCodes);
   router.delete('/:id', authGuard.verify(), quizCodeController.deleteQuizCode);

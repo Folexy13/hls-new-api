@@ -93,7 +93,7 @@ export class ResponseUtil {
 }
 
 export function authenticatedHandler(
-  handler: (req: AuthenticatedRequest, res: Response) => Promise<Response>
+  handler: (req: AuthenticatedRequest, res: Response) => Promise<Response | void | undefined>
 ): (req: Request, res: Response, next: NextFunction) => void {
   return (req, res, next) => {
     handler(req as AuthenticatedRequest, res).catch(next);

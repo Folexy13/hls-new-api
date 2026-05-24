@@ -27,6 +27,12 @@ export default class AuthRepositoryImpl implements AuthRepository {
   }
 
   async saveRefreshToken(userId: number, refreshToken: string): Promise<void> {
+    // First, delete any existing refresh tokens for this user to avoid duplicates
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId }
+    });
+    
+    // Then create the new refresh token
     await this.prisma.refreshToken.create({
       data: {
         token: refreshToken,
@@ -44,8 +50,13 @@ export default class AuthRepositoryImpl implements AuthRepository {
   }
 
   async invalidateRefreshToken(refreshToken: string): Promise<void> {
-    await this.prisma.refreshToken.delete({
-      where: { token: refreshToken }
-    });
+    try {
+      await this.prisma.refreshToken.delete({
+        where: { token: refreshToken }
+      });
+    } catch (error) {
+      // Token might already be deleted, ignore the error
+      console.log('Token already invalidated or not found');
+    }
   }
 }

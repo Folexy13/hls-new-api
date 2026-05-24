@@ -7,9 +7,9 @@ import { SupplementRepository } from '../repositories/supplement.repository';
 @injectable()
 export class SupplementService {  constructor(@inject(SupplementRepository) private supplementRepository: SupplementRepository) {}
   
-  async findAll(page: number = 1, limit: number = 10): Promise<{ supplements: Supplement[]; total: number }> {
+  async findAll(page: number = 1, limit: number = 10, userId?: number): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
-    const result = await this.supplementRepository.findAll(skip, limit);
+    const result = await this.supplementRepository.findAll(skip, limit, userId);
     return { supplements: result.items, total: result.total };
   }
 

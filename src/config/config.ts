@@ -1,5 +1,8 @@
+import 'dotenv/config';
+
 export const config = {
   jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
   jwtExpiry: process.env.JWT_EXPIRY || '1h',
   refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || '7d',
   aws: {
@@ -9,6 +12,11 @@ export const config = {
     s3: {
       bucket: process.env.AWS_S3_BUCKET || 'your-bucket-name'
     }
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
   },
   paystack: {
     secretKey: process.env.PAYSTACK_SECRET_KEY || 'your-paystack-secret-key',

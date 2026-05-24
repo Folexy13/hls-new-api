@@ -1,0 +1,44 @@
+erDiagram
+  User ||--o{ RefreshToken : has
+  User ||--o{ Podcast : creates
+  User ||--o{ Supplement : sells
+  User ||--o{ Cart : owns
+  User ||--o{ Order : places
+  User ||--o{ Payment : makes
+  User ||--o{ Inbox : receives
+  User ||--|| Wallet : has
+  User ||--o{ Withdrawal : requests
+  User ||--|| NutrientType : has
+  User ||--o{ QuizCode : creates
+
+  Cart ||--o{ CartItem : contains
+  Supplement ||--o{ CartItem : in
+  Order ||--o{ OrderItem : has
+  Supplement ||--o{ OrderItem : in
+  Order ||--|| Payment : paid_by
+  Wallet ||--o{ Withdrawal : records
+
+  NutrientType ||--|| Basic : includes
+  NutrientType ||--|| Lifestyle : includes
+  NutrientType ||--|| Preference : includes
+
+  QuizCode }o--|| User : creator
+
+  User {
+    int id
+    string email
+    string password
+    string firstName
+    string lastName
+    string phone
+    Role role
+  }
+
+  QuizCode {
+    int id
+    string code
+    boolean isUsed
+    int createdBy
+    string benfekName
+    string benfekPhone
+  }

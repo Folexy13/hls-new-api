@@ -265,7 +265,7 @@ export class WalletController extends BaseController {
    */
   async getWithdrawalById(req: AuthenticatedRequest, res: Response) {
     try {
-      const withdrawalId = parseInt(req.params.id);
+      const withdrawalId = parseInt(req.params.id as any);
       const withdrawal = await this.walletService.getWithdrawalById(withdrawalId);
       
       if (!withdrawal) {
