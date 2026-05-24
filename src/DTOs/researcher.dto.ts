@@ -15,7 +15,7 @@ const OptionalDateSchema = z.preprocess((value) => {
 
 const OptionalRatingSchema = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value === 'string') return Number(value.replace('%', '').trim());
+  if (typeof value === 'string') return Number(value.replace(/%/g, '').trim());
   return value;
 }, z.number().min(0, 'Rating cannot be negative').max(100, 'Rating cannot exceed 100').nullable()).optional();
 

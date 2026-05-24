@@ -23,7 +23,7 @@ async function connect() {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1),
-    ssl: { rejectUnauthorized: false },
+    ssl: true,
     connectTimeout: 20000,
   });
 }

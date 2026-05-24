@@ -28,6 +28,28 @@ const s3 = new S3Client({
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 
+function safePathSegment(value) {
+  const segment = String(value || '').replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim();
+  if (!segment || segment === '.' || segment === '..') return null;
+  return segment;
+}
+
+function safeJoinUnder(parent, ...segments) {
+  const safeSegments = segments.map(safePathSegment);
+  if (safeSegments.some((segment) => !segment)) return null;
+
+  const parentPath = path.resolve(parent);
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+  const targetPath = path.resolve(parentPath, ...safeSegments);
+  const relativePath = path.relative(parentPath, targetPath);
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return targetPath;
+}
+
 function parseCsvLine(line) {
   const values = [];
   let value = '';
@@ -79,20 +101,15 @@ function normalizeName(value) {
 }
 
 function findDirectory(parent, expectedName) {
-  const exactPath = path.join(parent, expectedName);
-  if (fs.existsSync(exactPath)) return exactPath;
+  const exactPath = safeJoinUnder(parent, expectedName);
+  if (exactPath && fs.existsSync(exactPath)) return exactPath;
 
   const normalizedExpected = normalizeName(expectedName);
-  return fs
+  const match = fs
     .readdirSync(parent, { withFileTypes: true })
-    .find((entry) => entry.isDirectory() && normalizeName(entry.name) === normalizedExpected)
-    ? path.join(
-        parent,
-        fs
-          .readdirSync(parent, { withFileTypes: true })
-          .find((entry) => entry.isDirectory() && normalizeName(entry.name) === normalizedExpected).name,
-      )
-    : null;
+    .find((entry) => entry.isDirectory() && normalizeName(entry.name) === normalizedExpected);
+
+  return match ? safeJoinUnder(parent, match.name) : null;
 }
 
 function findProductImage(brand, product) {
@@ -100,8 +117,8 @@ function findProductImage(brand, product) {
   if (!brandDir) return null;
 
   for (const extension of IMAGE_EXTENSIONS) {
-    const exactPath = path.join(brandDir, `${product}${extension}`);
-    if (fs.existsSync(exactPath)) return exactPath;
+    const exactPath = safeJoinUnder(brandDir, `${product}${extension}`);
+    if (exactPath && fs.existsSync(exactPath)) return exactPath;
   }
 
   const normalizedProduct = normalizeName(product);
@@ -113,7 +130,7 @@ function findProductImage(brand, product) {
       return IMAGE_EXTENSIONS.includes(extension) && normalizeName(path.basename(entry.name, extension)) === normalizedProduct;
     });
 
-  return match ? path.join(brandDir, match.name) : null;
+  return match ? safeJoinUnder(brandDir, match.name) : null;
 }
 
 function contentTypeFor(filePath) {
@@ -132,8 +149,12 @@ async function uploadImage(filePath, brand, product) {
     const extension = path.extname(filePath).toLowerCase() || '.jpg';
     const brandPart = safeKeyPart(brand);
     const productPart = safeKeyPart(product);
-    const targetDir = path.join(publicImagesDir, brandPart);
-    const targetPath = path.join(targetDir, `${productPart}${extension}`);
+    const targetDir = safeJoinUnder(publicImagesDir, brandPart);
+    const targetPath = safeJoinUnder(publicImagesDir, brandPart, `${productPart}${extension}`);
+
+    if (!targetDir || !targetPath) {
+      throw new Error(`Invalid image output path for ${brand} - ${product}`);
+    }
 
     fs.mkdirSync(targetDir, { recursive: true });
     fs.copyFileSync(filePath, targetPath);
@@ -165,7 +186,7 @@ async function uploadImage(filePath, brand, product) {
 
 function parseRating(value) {
   if (!value) return null;
-  const rating = Number(String(value).replace('%', '').trim());
+  const rating = Number(String(value).replace(/%/g, '').trim());
   return Number.isFinite(rating) ? rating : null;
 }
 
