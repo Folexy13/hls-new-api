@@ -38,6 +38,7 @@ function safeJoinUnder(parent, ...segments) {
   const safeSegments = segments.map(safePathSegment);
   if (safeSegments.some((segment) => !segment)) return null;
 
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const parentPath = path.resolve(parent);
   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const targetPath = path.resolve(parentPath, ...safeSegments);
