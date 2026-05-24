@@ -15,11 +15,54 @@ import { z } from 'zod';
 import { formatHealthField } from '../utilities/health-field.utility';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
+const HLS_PHARMACY_NAME = 'HLS Pharmacy';
+
+const resolveDefaultPharmacyFromPrincipal = (principal?: {
+  profession?: string | null;
+  currentPlaceOfWork?: string | null;
+  phone?: string | null;
+  whatsappNumber?: string | null;
+  referPharmacy?: boolean | null;
+  referredPharmacyName?: string | null;
+  referredPharmacyPhone?: string | null;
+}) => {
+  const profession = principal?.profession?.trim().toLowerCase() || '';
+
+  if (profession === 'hls ap') {
+    return {
+      preferredPharmacyName: HLS_PHARMACY_NAME,
+      preferredPharmacyPhone: null,
+    };
+  }
+
+  if (profession === 'pharmacist' && principal?.currentPlaceOfWork?.trim()) {
+    return {
+      preferredPharmacyName: principal.currentPlaceOfWork.trim(),
+      preferredPharmacyPhone: principal.phone?.trim() || principal.whatsappNumber?.trim() || null,
+    };
+  }
+
+  if (profession !== 'pharmacist' && principal?.referPharmacy && principal.referredPharmacyName?.trim()) {
+    return {
+      preferredPharmacyName: principal.referredPharmacyName.trim(),
+      preferredPharmacyPhone: principal.referredPharmacyPhone?.trim() || null,
+    };
+  }
+
+  return {
+    preferredPharmacyName: null,
+    preferredPharmacyPhone: null,
+  };
+};
+
+import { EmailService } from '../services/email.service';
+
 @injectable()
 export class BenfekController {
   constructor(
     @inject('PrismaClient') private prisma: PrismaClient,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {}
 
   private async buildProfile(userId: number) {
@@ -75,27 +118,26 @@ export class BenfekController {
             whatsappNumber: true,
             profession: true,
             currentPlaceOfWork: true,
+            referPharmacy: true,
+            referredPharmacyName: true,
+            referredPharmacyPhone: true,
           },
         },
       },
     });
 
     let resolvedUser = user;
-    const principalProfession = quizCode?.creator?.profession?.trim().toLowerCase();
-    const principalPharmacyName = quizCode?.creator?.currentPlaceOfWork?.trim();
-    const principalPharmacyPhone =
-      quizCode?.creator?.phone?.trim() || quizCode?.creator?.whatsappNumber?.trim() || undefined;
+    const defaultPharmacy = resolveDefaultPharmacyFromPrincipal(quizCode?.creator);
 
     if (
       !resolvedUser.preferredPharmacyName?.trim() &&
-      principalProfession === 'pharmacy' &&
-      principalPharmacyName
+      defaultPharmacy.preferredPharmacyName
     ) {
       resolvedUser = await this.prisma.user.update({
         where: { id: userId },
         data: {
-          preferredPharmacyName: principalPharmacyName,
-          preferredPharmacyPhone: resolvedUser.preferredPharmacyPhone?.trim() || principalPharmacyPhone,
+          preferredPharmacyName: defaultPharmacy.preferredPharmacyName,
+          preferredPharmacyPhone: resolvedUser.preferredPharmacyPhone?.trim() || defaultPharmacy.preferredPharmacyPhone,
         },
         select: {
           id: true,
@@ -146,7 +188,7 @@ export class BenfekController {
               familyCondition: formatHealthField(quizCode.familyCondition),
               medications: formatHealthField(quizCode.medications),
               hasCurrentCondition: quizCode.hasCurrentCondition,
-              currentConditions: (quizCode as any).currentConditions ?? undefined,
+              currentConditions: formatHealthField((quizCode as any).currentConditions),
             },
             principal: quizCode.creator,
           }
@@ -879,6 +921,24 @@ export class BenfekController {
           isRead: false,
         },
       });
+
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      const isPrincipal = user?.role === 'principal';
+      const userType = isPrincipal ? 'Principal' : 'Benfek';
+
+      await this.emailService.notifyAdmin(
+        `New Support Ticket from ${userType}`,
+        `Complaints or messages from ${userType.toLowerCase()}`,
+        [
+          { label: "User ID", value: String(userId) },
+          { label: "User Name", value: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown' },
+          { label: "Email", value: user?.email || 'N/A' },
+          { label: "Role", value: user?.role || 'N/A' },
+          { label: "Category", value: data.category },
+          { label: "Subject", value: data.subject },
+          { label: "Message", value: data.message }
+        ]
+      ).catch(console.error);
 
       return ResponseUtil.success(
         res,

@@ -11,6 +11,46 @@ import { EmailService } from "./email.service";
 import crypto from "crypto";
 import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 
+const HLS_PHARMACY_NAME = "HLS Pharmacy";
+
+const resolveDefaultPharmacyFromPrincipal = (principal?: {
+  profession?: string | null;
+  currentPlaceOfWork?: string | null;
+  phone?: string | null;
+  whatsappNumber?: string | null;
+  referPharmacy?: boolean | null;
+  referredPharmacyName?: string | null;
+  referredPharmacyPhone?: string | null;
+}) => {
+  const profession = principal?.profession?.trim().toLowerCase() || "";
+
+  if (profession === "hls ap") {
+    return {
+      preferredPharmacyName: HLS_PHARMACY_NAME,
+      preferredPharmacyPhone: null,
+    };
+  }
+
+  if (profession === "pharmacist" && principal?.currentPlaceOfWork?.trim()) {
+    return {
+      preferredPharmacyName: principal.currentPlaceOfWork.trim(),
+      preferredPharmacyPhone: principal.phone?.trim() || principal.whatsappNumber?.trim() || null,
+    };
+  }
+
+  if (profession !== "pharmacist" && principal?.referPharmacy && principal.referredPharmacyName?.trim()) {
+    return {
+      preferredPharmacyName: principal.referredPharmacyName.trim(),
+      preferredPharmacyPhone: principal.referredPharmacyPhone?.trim() || null,
+    };
+  }
+
+  return {
+    preferredPharmacyName: null,
+    preferredPharmacyPhone: null,
+  };
+};
+
 @injectable()
 export class AuthService {
   constructor(
@@ -42,6 +82,19 @@ export class AuthService {
       phone: phone || undefined,
       password: hashedPassword,
     });
+
+    if (user.role === "principal") {
+      await this.emailService.notifyAdmin(
+        "New Principal Registration",
+        "Registered principal details",
+        [
+          { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() },
+          { label: "Email", value: user.email },
+          { label: "Phone", value: user.phone },
+          { label: "Role", value: user.role }
+        ]
+      ).catch(console.error);
+    }
 
     return this.createAuthResponse(user);
   }
@@ -171,6 +224,18 @@ export class AuthService {
       role: "benfek"
     });
 
+    // Notify admin
+    await this.emailService.notifyAdmin(
+      "New Benfek Registration",
+      "Complete data Details of registered benfek",
+      [
+        { label: "Username", value: data.username },
+        { label: "Email", value: email },
+        { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+        { label: "Role", value: user.role }
+      ]
+    ).catch(console.error);
+
     return this.createAuthResponse(user);
   }
 
@@ -189,6 +254,26 @@ export class AuthService {
       }
     }
 
+    const linkedQuizCode = data.quizCode
+      ? await this.prisma.quizCode.findUnique({
+          where: { code: data.quizCode },
+          include: {
+            creator: {
+              select: {
+                profession: true,
+                currentPlaceOfWork: true,
+                phone: true,
+                whatsappNumber: true,
+                referPharmacy: true,
+                referredPharmacyName: true,
+                referredPharmacyPhone: true,
+              },
+            },
+          },
+        })
+      : null;
+    const defaultPharmacy = resolveDefaultPharmacyFromPrincipal(linkedQuizCode?.creator);
+
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.authRepository.createUser({
       email,
@@ -197,7 +282,9 @@ export class AuthService {
       firstName: data.firstName,
       lastName: data.lastName,
       phone: phone || undefined,
-      role: "benfek"
+      role: "benfek",
+      preferredPharmacyName: defaultPharmacy.preferredPharmacyName || undefined,
+      preferredPharmacyPhone: defaultPharmacy.preferredPharmacyPhone || undefined,
     });
 
     if (data.quizCode) {
@@ -213,6 +300,19 @@ export class AuthService {
         },
       });
     }
+
+    // Notify admin
+    await this.emailService.notifyAdmin(
+      "New Benfek Registration (Unreferred)",
+      "Complete data Details of registered benfek",
+      [
+        { label: "Username", value: user.username },
+        { label: "Email", value: email },
+        { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+        { label: "Phone", value: user.phone || 'N/A' },
+        { label: "Quiz Code", value: data.quizCode || 'None' }
+      ]
+    ).catch(console.error);
 
     return this.createAuthResponse(user);
   }

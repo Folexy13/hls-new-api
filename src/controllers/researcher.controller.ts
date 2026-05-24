@@ -126,7 +126,7 @@ export class ResearcherController {
             familyCondition: formatHealthField(quizCode.familyCondition),
             medications: formatHealthField(quizCode.medications),
             hasCurrentCondition: quizCode.hasCurrentCondition,
-            currentConditions: (quizCode as any).currentConditions ?? undefined,
+            currentConditions: formatHealthField((quizCode as any).currentConditions),
           },
           quiz: {
             basics: {
@@ -251,7 +251,7 @@ export class ResearcherController {
           strength: data.strength || null,
           dosageForm: null, // Moved to tags
           budgetRange: null, // Moved to tags
-          expiryDate: (data as any).expiryDate || null,
+          expiryDate: data.expiryDate || null,
           tags: data.tags,
           wholesalers: data.wholesalers?.length ? data.wholesalers : null,
           userId: req.user.id,
@@ -278,7 +278,7 @@ export class ResearcherController {
         data: {
           ...data,
           tags: data.tags,
-          expiryDate: (data as any).expiryDate,
+          ...(data.expiryDate !== undefined && { expiryDate: data.expiryDate || null }),
           dosageForm: null, // Ensure columns stay clean
           budgetRange: null,
           ...(data.strength !== undefined && { strength: data.strength || null }),
@@ -327,11 +327,13 @@ export class ResearcherController {
           quizCode: data.code,
           packId: data.packId,
           packName: data.packName,
+          rationale: data.rationale || null,
           researcherId: req.user.id,
           status: data.status,
         },
         update: {
           packName: data.packName,
+          rationale: data.rationale || null,
           researcherId: req.user.id,
           status: data.status,
         },
@@ -360,6 +362,7 @@ export class ResearcherController {
               packId: pack.id,
               supplementId: item.id,
               quantity: item.quantity,
+              rationale: item.rationale || null,
               selectedWholesalerName: item.selectedWholesalerName || null,
               selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
               selectedWholesalerContact: item.selectedWholesalerContact || null,
@@ -378,6 +381,7 @@ export class ResearcherController {
             } as any,
             update: {
               quantity: item.quantity,
+              rationale: item.rationale || null,
               selectedWholesalerName: item.selectedWholesalerName || null,
               selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
               selectedWholesalerContact: item.selectedWholesalerContact || null,

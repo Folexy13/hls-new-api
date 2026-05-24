@@ -7,9 +7,22 @@ const WholesalerDetailSchema = z.object({
   address: z.string().min(2, 'Wholesaler address is required').transform((value) => value.trim()),
 });
 
+const OptionalDateSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string' || value instanceof Date) return new Date(value);
+  return value;
+}, z.date().nullable()).optional();
+
+const OptionalRatingSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') return Number(value.replace(/%/g, '').trim());
+  return value;
+}, z.number().min(0, 'Rating cannot be negative').max(100, 'Rating cannot exceed 100').nullable()).optional();
+
 export const ResearcherSupplementSchema = z.object({
   name: z.string().min(2, 'Name is required').transform((value) => value.trim()),
   description: z.string().min(2, 'Description is required').transform((value) => value.trim()),
+  rating: OptionalRatingSchema,
   price: z.number().nonnegative('Price cannot be negative'),
   stock: z.number().int().nonnegative('Stock cannot be negative').optional().default(0),
   imageUrl: z.string().optional().nullable(),
@@ -18,6 +31,7 @@ export const ResearcherSupplementSchema = z.object({
   strength: z.string().optional().nullable(),
   dosageForm: z.string().optional().nullable(),
   budgetRange: z.string().optional().nullable(),
+  expiryDate: OptionalDateSchema,
   tags: z.record(z.array(z.string())).optional().default({}),
   status: z.string().optional().default('in_stock'),
   wholesalers: z.array(WholesalerDetailSchema).optional().default([]),
@@ -33,6 +47,7 @@ export const DispatchPackSchema = z.object({
   code: z.string().min(1, 'Benfek code is required').transform((value) => value.trim().toUpperCase()),
   packId: z.string().min(1, 'Pack ID is required'),
   packName: z.string().min(1, 'Pack name is required'),
+  rationale: z.string().optional().nullable().transform((value) => (value ? value.trim() : null)),
   supplementIds: z.array(z.number().int().positive()).min(1, 'Select at least one supplement').optional(),
   items: z.array(
     z.object({
@@ -43,6 +58,7 @@ export const DispatchPackSchema = z.object({
       selectedWholesalerContact: z.string().optional().nullable(),
       selectedWholesalerAddress: z.string().optional().nullable(),
       forceDispatchWithoutWholesaler: z.boolean().optional().default(false),
+      rationale: z.string().optional().nullable().transform((value) => (value ? value.trim() : null)),
     })
   ).min(1, 'Select at least one supplement').optional(),
   status: z.string().optional().default('dispatched'),

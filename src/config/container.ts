@@ -44,7 +44,10 @@ const container = new Container();
 container.bind<Container>(Container).toConstantValue(container);
 
 // Initialize PrismaClient
-const prisma = new PrismaClient();
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL || "");
+const prisma = new PrismaClient({ adapter });
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma as any);
 
 // Bind repositories

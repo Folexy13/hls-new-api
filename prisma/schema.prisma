@@ -1,10 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -154,9 +154,10 @@ model Supplement {
   id          Int         @id @default(autoincrement())
   name        String
   description String
+  rating      Float?
   price       Float
   stock       Int
-  imageUrl    String?     // Product image URL
+  imageUrl    String?     @db.Text // Product image URL
   category    String?     // Product category
   manufacturer String?
   strength    String?
@@ -180,6 +181,7 @@ model ResearcherPack {
   quizCode     String
   packId       String
   packName     String
+  rationale    String?              @db.Text
   researcherId Int
   researcher   User                 @relation(fields: [researcherId], references: [id], onDelete: Cascade)
   items        ResearcherPackItem[]
@@ -197,6 +199,7 @@ model ResearcherPackItem {
   supplementId Int
   supplement   Supplement     @relation(fields: [supplementId], references: [id], onDelete: Cascade)
   quantity     Int            @default(1)
+  rationale    String?        @db.Text
   selectedWholesalerName String?
   selectedWholesalerPrice Float?
   selectedWholesalerContact String?

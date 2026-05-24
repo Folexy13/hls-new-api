@@ -5,6 +5,8 @@ import { WithdrawalDTO } from '../DTOs/wallet.dto';
 import { Role } from '../types/auth.types';
 import { PaystackService } from './paystack.service';
 
+const PRINCIPAL_MIN_WITHDRAWAL_AMOUNT = 350;
+
 // Define wallet and withdrawal types
 interface Wallet {
   id: number;
@@ -34,11 +36,14 @@ interface Withdrawal {
   updatedAt: Date;
 }
 
+import { EmailService } from './email.service';
+
 @injectable()
 export class WalletService {
   constructor(
     @inject(WalletRepository) private walletRepository: WalletRepository,
-    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository
+    @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository,
+    @inject(EmailService) private emailService: EmailService
   ) {}  async getWallet(userId: number): Promise<Wallet | null> {
     const wallet = await this.walletRepository.findByUserId(userId);
     if (!wallet) return null;
@@ -70,6 +75,10 @@ export class WalletService {
     walletId: number,
     data: WithdrawalDTO
   ): Promise<Withdrawal> {
+    if (userRole === 'principal' && data.amount < PRINCIPAL_MIN_WITHDRAWAL_AMOUNT) {
+      throw new Error(`Minimum withdrawal amount is NGN ${PRINCIPAL_MIN_WITHDRAWAL_AMOUNT}.00`);
+    }
+
     // Check monthly withdrawal limit
     const today = new Date();
     const month = today.getMonth() + 1;
@@ -92,7 +101,7 @@ export class WalletService {
       throw new Error('Wallet not found');
     }
     if (wallet.balance < data.amount) {
-      throw new Error('Insufficient balance');
+      throw new Error('Insufficient withdrawable balance');
     }
 
     // Create withdrawal request
@@ -106,6 +115,19 @@ export class WalletService {
       month,
       year
     });
+
+    if (userRole === 'principal') {
+      await this.emailService.notifyAdmin(
+        "New Principal Withdrawal Request",
+        "Principal's request for withdrawal",
+        [
+          { label: "Principal User ID", value: String(userId) },
+          { label: "Amount", value: `₦${data.amount}` },
+          { label: "Bank Account", value: data.accountNumber },
+          { label: "Bank Name", value: data.bankName || 'N/A' },
+        ]
+      ).catch(console.error);
+    }
 
     // Debit wallet
     await this.debitWallet(walletId, data.amount);
@@ -136,11 +158,17 @@ export class WalletService {
         transferReference: transferReference || null,
         transferRecipientCode: recipientCode,
       } as any);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Withdrawal processing error details:', error?.response?.data || error);
       await this.creditWallet(walletId, data.amount);
       await this.withdrawalRepository.update(withdrawal.id, {
         status: 'failed' as any,
       } as any);
+      
+      // If it's an axios error with a message from paystack, throw a better error
+      if (error?.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
       throw error;
     }
 
