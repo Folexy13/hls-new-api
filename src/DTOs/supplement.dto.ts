@@ -1,8 +1,15 @@
 import { z } from 'zod';
 
+const OptionalRatingSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') return Number(value.replace('%', '').trim());
+  return value;
+}, z.number().min(0, 'Rating cannot be negative').max(100, 'Rating cannot exceed 100').nullable()).optional();
+
 export const CreateSupplementSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
+  rating: OptionalRatingSchema,
   price: z.number().positive('Price must be positive'),
   stock: z.number().nonnegative('Stock cannot be negative'),
   imageUrl: z.string().optional().nullable(),

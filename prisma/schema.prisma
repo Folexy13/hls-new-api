@@ -154,6 +154,7 @@ model Supplement {
   id          Int         @id @default(autoincrement())
   name        String
   description String
+  rating      Float?
   price       Float
   stock       Int
   imageUrl    String?     @db.Text // Product image URL

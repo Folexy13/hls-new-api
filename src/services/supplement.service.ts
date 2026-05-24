@@ -18,7 +18,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return new Date(value);
   }
   
-  async findAll(page: number = 1, limit: number = 10, userId?: number, userRole?: string): Promise<{ supplements: Supplement[]; total: number }> {
+  async findAll(page: number = 1, limit: number = 20, userId?: number, userRole?: string): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
     const result = await this.supplementRepository.findAll(skip, limit, userId, userRole);
     return { supplements: result.items, total: result.total };
@@ -40,6 +40,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.create({
       name: data.name,
       description: data.description,
+      rating: data.rating ?? null,
       price: data.price,
       stock: data.stock,
       userId,
@@ -71,6 +72,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.update(id, {
       name: data.name,
       description: data.description,
+      rating: data.rating,
       price: data.price,
       stock: data.stock,
       imageUrl: data.imageUrl,
