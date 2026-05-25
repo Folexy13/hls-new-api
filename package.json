@@ -5,6 +5,8 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "npx prisma generate && tsc",
+    "postinstall": "prisma generate",
+    "predev": "prisma generate",
     "start": "node ./dist/app.js",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "prisma:generate": "prisma generate",
