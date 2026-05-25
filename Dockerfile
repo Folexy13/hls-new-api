@@ -9,12 +9,10 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Copy package files
 COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install all dependencies (including dev for build)
 RUN npm install --legacy-peer-deps
-
-# Copy prisma schema
-COPY prisma ./prisma/
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -36,12 +34,12 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Copy package files
 COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install all dependencies (chalk and other runtime deps are needed)
 RUN npm install --legacy-peer-deps
 
-# Copy prisma schema and generated client
-COPY --from=builder /app/prisma ./prisma/
+# Copy generated client
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
