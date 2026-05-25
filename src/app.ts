@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import express from "express";
+import { config } from "./config/config";
 import morgan from "morgan";
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
@@ -10,27 +11,28 @@ import cron from "node-cron";
 import axios from "axios";
 import 'dotenv/config'
 const PORT = process.env.PORT || 3000;
-
+const allowedOrigins =config.corsAllowedOrigins;
 const app = express();
+
+
 
 // Middleware
 app.use(morgan("dev")); // Adds HTTP request logging
 app.use(express.json());
 app.use(
   cors({
-    origin: [
-      "https://www.hlsnigeria.com",
-      "https://hlsnigeria.com",
-      "http://localhost:3000",
-      "https://localhost:3000",
-      "http://localhost:3001",
-      "https://localhost:3001",
-      "https://hls-testing.netlify.app",
-      "http://localhost:3002",
-      "https://localhost:3002",
-      "http://localhost:7000",
-      "https://localhost:7000"
-    ], // or an array of allowed origins
+    origin: (origin, callback) => {
+      // Allow requests with no origin (Postman, mobile apps, server-to-server)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
 
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
