@@ -35,7 +35,11 @@ export const CreatePrincipalUserSchema = CreatePrincipalProfileSchema.extend({
 });
 
 export const UpdatePrincipalUserSchema = UpdatePrincipalProfileSchema.extend({
+  currentPassword: z.string().min(1, 'Current password is required').optional(),
   password: PasswordSchema.optional(),
+}).refine((data) => !data.password || data.password !== data.currentPassword, {
+  message: 'New password must be different from your current password',
+  path: ['password'],
 });
 
 export const CreateBenfekUserSchema = CreatePrincipalProfileSchema.extend({

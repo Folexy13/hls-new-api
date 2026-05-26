@@ -1,5 +1,5 @@
 import { injectable, inject } from 'inversify';
-import { CreateSupplementDTO, UpdateSupplementDTO } from '../DTOs/supplement.dto';
+import { CreateSupplementDTO, UpdateSupplementDTO, WholesalerPriceDTO } from '../DTOs/supplement.dto';
 import { Prisma, type Supplement } from '@prisma/client';
 import { AppError } from '../utilities/errors';
 import { SupplementRepository } from '../repositories/supplement.repository';
@@ -21,6 +21,12 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
   async findAll(page: number = 1, limit: number = 20, userId?: number, userRole?: string): Promise<{ supplements: Supplement[]; total: number }> {
     const skip = (page - 1) * limit;
     const result = await this.supplementRepository.findAll(skip, limit, userId, userRole);
+    return { supplements: result.items, total: result.total };
+  }
+
+  async findHlsGallery(page: number = 1, limit: number = 100): Promise<{ supplements: Supplement[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const result = await this.supplementRepository.findHlsGallery(skip, limit);
     return { supplements: result.items, total: result.total };
   }
 
@@ -54,6 +60,83 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       tags: this.toNullableJson(data.tags),
       wholesalers: this.toNullableJson(data.wholesalers),
       status: data.status ?? 'in_stock',
+    });
+  }
+
+  async saveWholesalerPrice(
+    supplementId: number,
+    wholesaler: { id: number; email: string },
+    data: WholesalerPriceDTO,
+  ): Promise<Supplement> {
+    const supplement = await this.findById(supplementId);
+    if (!supplement) {
+      throw new AppError('Supplement not found', 404);
+    }
+
+    const existingWholesalers = Array.isArray((supplement as any).wholesalers)
+      ? ((supplement as any).wholesalers as any[])
+      : [];
+
+    const nextWholesalers = existingWholesalers.filter((item) => {
+      const id = Number(item?.wholesalerUserId || 0);
+      const email = String(item?.email || '').toLowerCase();
+      return id !== wholesaler.id && email !== wholesaler.email.toLowerCase();
+    });
+
+    nextWholesalers.push({
+      wholesalerUserId: wholesaler.id,
+      name: wholesaler.email,
+      email: wholesaler.email,
+      price: data.price,
+      contact: data.contact || wholesaler.email,
+      address: data.address || '',
+      updatedAt: new Date().toISOString(),
+    });
+
+    await this.supplementRepository.update(supplementId, {
+      wholesalers: this.toNullableJson(nextWholesalers),
+    });
+
+    const ownedProduct = await this.supplementRepository.findOwnedProductByName(
+      wholesaler.id,
+      supplement.name,
+      supplement.manufacturer,
+    );
+
+    const productData = {
+      name: supplement.name,
+      description: supplement.description,
+      rating: supplement.rating ?? null,
+      price: data.price,
+      stock: supplement.stock,
+      imageUrl: supplement.imageUrl ?? null,
+      category: supplement.category ?? null,
+      manufacturer: supplement.manufacturer ?? null,
+      strength: supplement.strength ?? null,
+      expiryDate: supplement.expiryDate ?? null,
+      dosageForm: supplement.dosageForm ?? null,
+      budgetRange: supplement.budgetRange ?? null,
+      tags: this.toNullableJson(supplement.tags),
+      wholesalers: this.toNullableJson([{
+        wholesalerUserId: wholesaler.id,
+        name: wholesaler.email,
+        email: wholesaler.email,
+        price: data.price,
+        contact: data.contact || wholesaler.email,
+        address: data.address || '',
+        sourceSupplementId: supplement.id,
+        updatedAt: new Date().toISOString(),
+      }]),
+      status: supplement.status ?? 'in_stock',
+    };
+
+    if (ownedProduct) {
+      return this.supplementRepository.update(ownedProduct.id, productData);
+    }
+
+    return this.supplementRepository.create({
+      ...productData,
+      userId: wholesaler.id,
     });
   }
 

@@ -10,7 +10,7 @@ export default class AuthRepositoryImpl implements AuthRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
 
   async createUser(
-    data: RegisterUserDTO & {
+    data: Omit<RegisterUserDTO, 'phone'> & {
       username?: string;
       phone?: string | null;
       researcherType?: "maker" | "checker" | null;
@@ -25,6 +25,9 @@ export default class AuthRepositoryImpl implements AuthRepository {
         password: data.password, // Note: Password should be hashed before storage
         firstName: data.firstName,
         lastName: data.lastName,
+        businessName: (data as any).businessName ?? null,
+        mainBranch: (data as any).mainBranch ?? null,
+        contact: (data as any).contact ?? null,
         phone: data.phone ?? null,
         preferredPharmacyName: data.preferredPharmacyName ?? null,
         preferredPharmacyPhone: data.preferredPharmacyPhone ?? null,

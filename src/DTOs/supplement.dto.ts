@@ -35,5 +35,13 @@ export const CreateSupplementSchema = z.object({
   status: z.string().optional(),
 });
 export const UpdateSupplementSchema = CreateSupplementSchema.partial();
+
+export const WholesalerPriceSchema = z.object({
+  price: z.coerce.number().positive('Price must be greater than 0'),
+  contact: z.string().trim().optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+});
+
 export type CreateSupplementDTO = z.infer<typeof CreateSupplementSchema>;
 export type UpdateSupplementDTO = z.infer<typeof UpdateSupplementSchema>;
+export type WholesalerPriceDTO = z.infer<typeof WholesalerPriceSchema>;
