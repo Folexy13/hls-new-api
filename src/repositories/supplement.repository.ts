@@ -59,6 +59,46 @@ export class SupplementRepository {
     };
   }
 
+  async findHlsGallery(skip?: number, take?: number): Promise<{ items: SupplementWithUser[]; total: number }> {
+    const where: Prisma.SupplementWhereInput = {
+      user: {
+        is: {
+          role: {
+            not: 'wholesaler' as any,
+          },
+        },
+      },
+    };
+
+    const [supplements, total] = await Promise.all([
+      this.prisma.supplement.findMany({
+        where,
+        skip: skip || 0,
+        take: take || 100,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }),
+      this.prisma.supplement.count({ where })
+    ]);
+
+    return {
+      items: supplements,
+      total
+    };
+  }
+
   async findById(id: number): Promise<SupplementWithUser | null> {
     return this.prisma.supplement.findUnique({
       where: { id },
@@ -92,6 +132,31 @@ export class SupplementRepository {
       },
       orderBy: {
         createdAt: 'desc'
+      }
+    });
+  }
+
+  async findOwnedProductByName(
+    userId: number,
+    name: string,
+    manufacturer?: string | null,
+  ): Promise<SupplementWithUser | null> {
+    return this.prisma.supplement.findFirst({
+      where: {
+        userId,
+        name,
+        ...(manufacturer ? { manufacturer } : {}),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true
+          }
+        }
       }
     });
   }

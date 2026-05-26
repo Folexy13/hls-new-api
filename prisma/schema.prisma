@@ -37,6 +37,9 @@ model User {
   password      String
   firstName     String
   lastName      String
+  businessName  String?        @db.Text
+  mainBranch    String?        @db.Text
+  contact       String?        @db.Text
   phone         String?        @unique
   whatsappNumber String?       @db.Text
   deliveryAddress String?      @db.Text

@@ -132,7 +132,12 @@ export class PrincipalController extends BaseController {
       return ResponseUtil.success(res, principal, 'Principal profile updated');
     } catch (error) {
       const message = (error as Error).message || 'Failed to update principal profile';
-      const status = message.toLowerCase().includes('not found') ? 404 : 500;
+      const normalizedMessage = message.toLowerCase();
+      const status = normalizedMessage.includes('not found')
+        ? 404
+        : normalizedMessage.includes('password') || normalizedMessage.includes('registered')
+          ? 400
+          : 500;
       return ResponseUtil.error(res, message, status);
     }
   }
@@ -235,7 +240,12 @@ export class PrincipalController extends BaseController {
       return ResponseUtil.success(res, principal, 'Principal updated successfully');
     } catch (error) {
       const message = (error as Error).message || 'Failed to update principal';
-      const status = message.toLowerCase().includes('not found') ? 404 : 500;
+      const normalizedMessage = message.toLowerCase();
+      const status = normalizedMessage.includes('not found')
+        ? 404
+        : normalizedMessage.includes('password') || normalizedMessage.includes('registered')
+          ? 400
+          : 500;
       return ResponseUtil.error(res, message, status);
     }
   }
