@@ -5,7 +5,7 @@ import { SupplementService } from '../services/supplement.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import { AuthenticatedRequest } from '../types/auth.types';
-import { CreateSupplementSchema, UpdateSupplementSchema, WholesalerPriceSchema } from '../DTOs/supplement.dto';
+import { CreateSupplementSchema, UpdateSupplementSchema, WholesalerPriceSchema, WholesalerUpdateSupplementSchema } from '../DTOs/supplement.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 import { cloudinaryService } from '../utilities/cloudinary.utility';
 
@@ -381,6 +381,41 @@ export class SupplementController extends BaseController {
     }
   }
 
+  async updateWholesalerProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const supplementId = Number(req.params.id);
+      if (!Number.isFinite(supplementId) || supplementId <= 0) {
+        return ResponseUtil.error(res, 'Invalid supplement ID', 400);
+      }
+
+      const data = WholesalerUpdateSupplementSchema.parse(req.body);
+      const supplement = await this.supplementService.update(supplementId, req.user.id, data);
+      return ResponseUtil.success(res, { supplement }, 'Wholesaler product updated successfully');
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 400;
+      return ResponseUtil.error(res, error, status);
+    }
+  }
+
+  async deleteWholesalerProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const supplementId = Number(req.params.id);
+      if (!Number.isFinite(supplementId) || supplementId <= 0) {
+        return ResponseUtil.error(res, 'Invalid supplement ID', 400);
+      }
+
+      await this.supplementService.delete(supplementId, req.user.id);
+      return ResponseUtil.success(res, null, 'Wholesaler product deleted successfully');
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 400;
+      return ResponseUtil.error(res, error, status);
+    }
+  }
+
   /**
    * @swagger
    * /api/v2/supplements/user:
@@ -610,7 +645,9 @@ export class SupplementController extends BaseController {
    */
   async uploadImage(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensurePrincipalRole(req, res)) return;
+      if (!['principal', 'wholesaler'].includes(req.user.role)) {
+        return ResponseUtil.error(res, 'Only principals and wholesalers can upload images', 403);
+      }
 
       if (!req.file) {
         return ResponseUtil.error(res, 'No image file provided', 400);
@@ -664,7 +701,9 @@ export class SupplementController extends BaseController {
    */
   async uploadImageBase64(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensurePrincipalRole(req, res)) return;
+      if (!['principal', 'wholesaler'].includes(req.user.role)) {
+        return ResponseUtil.error(res, 'Only principals and wholesalers can upload images', 403);
+      }
 
       const { image } = req.body;
       if (!image) {

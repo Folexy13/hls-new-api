@@ -146,6 +146,16 @@ export const createSupplementRoutes = (container: Container): Router => {
     authenticatedHandler(supplementController.createWholesalerProduct.bind(supplementController))
   );
 
+  router.put('/wholesaler/products/:id',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.updateWholesalerProduct.bind(supplementController))
+  );
+
+  router.delete('/wholesaler/products/:id',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.deleteWholesalerProduct.bind(supplementController))
+  );
+
   router.put('/wholesaler/gallery/:id/price',
     authGuard.verify(),
     authenticatedHandler(supplementController.saveWholesalerPrice.bind(supplementController))
