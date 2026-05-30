@@ -57,8 +57,14 @@ function parseCsv(filePath) {
 }
 
 function safeJoinUnder(parent, relativePath) {
+  const requestedPath = String(relativePath || '');
+  if (!requestedPath || requestedPath.includes('\0') || path.isAbsolute(requestedPath)) return null;
+
+  const segments = requestedPath.split(/[\\/]+/);
+  if (segments.includes('..')) return null;
+
   const parentPath = path.resolve(parent);
-  const targetPath = path.resolve(parentPath, String(relativePath || ''));
+  const targetPath = path.resolve(parentPath, requestedPath); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const relative = path.relative(parentPath, targetPath);
   if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return targetPath;
@@ -104,7 +110,7 @@ async function uploadImageToCloudinary(filePath, brand, product) {
     }
     return null;
   } catch (error) {
-    console.error(`Failed to upload ${publicId}:`, error.response?.data?.error?.message || error.message);
+    console.error('Failed to upload:', publicId, error.response?.data?.error?.message || error.message);
     throw error;
   }
 }
