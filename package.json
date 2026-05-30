@@ -51,7 +51,7 @@
     "node-cron": "^4.2.1",
     "prisma": "7.8.0",
     "reflect-metadata": "^0.2.2",
-    "resend": "^6.12.3",
+    "resend": "^6.12.4",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "ts-node": "^10.9.2",
