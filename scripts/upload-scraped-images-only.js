@@ -67,7 +67,9 @@ function safeJoinUnder(parent, relativePath) {
   const segments = requestedPath.split(/[\\/]+/);
   if (segments.includes('..')) return null;
 
-  const parentPath = path.resolve(parent);
+  if (!path.isAbsolute(parent)) return null;
+
+  const parentPath = parent;
   const targetPath = path.resolve(parentPath, requestedPath); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const relative = path.relative(parentPath, targetPath);
   if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
