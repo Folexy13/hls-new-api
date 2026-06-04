@@ -9,6 +9,8 @@ export const createContentRoutes = (container: Container): Router => {
   const authGuard = container.get(AuthGuard);
   const contentController = container.get(ContentController);
 
+  router.get('/public/articles', authenticatedHandler(contentController.getPublicArticles));
+  router.get('/public/articles/:id', authenticatedHandler(contentController.getPublicArticle));
   router.get('/principal/articles', authGuard.verify(), authenticatedHandler(contentController.getPrincipalArticles));
   router.post('/principal/articles', authGuard.verify(), authenticatedHandler(contentController.createArticle));
   router.get('/principal/articles/:id', authGuard.verify(), authenticatedHandler(contentController.getPrincipalArticle));
