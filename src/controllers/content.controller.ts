@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { injectable, inject } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { z, ZodError } from 'zod';
@@ -123,6 +123,57 @@ export class ContentController {
       });
     } catch (error) {
       return ResponseUtil.error(res, 'Failed to retrieve articles', 500, error);
+    }
+  };
+
+  getPublicArticles = async (_req: Request, res: Response) => {
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT a.*, u.firstName, u.lastName
+         FROM Article a
+         INNER JOIN User u ON u.id = a.userId
+         WHERE a.status = 'published'
+         ORDER BY a.createdAt DESC`
+      );
+
+      return ResponseUtil.success(res, {
+        articles: rows.map((row) => ({
+          ...row,
+          tags: this.parseTags(row.tags),
+          author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Principal',
+        })),
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve public articles', 500, error);
+    }
+  };
+
+  getPublicArticle = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT a.*, u.firstName, u.lastName
+         FROM Article a
+         INNER JOIN User u ON u.id = a.userId
+         WHERE a.id = ? AND a.status = 'published'
+         LIMIT 1`,
+        articleId
+      );
+
+      if (!rows.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const row = rows[0];
+      return ResponseUtil.success(res, {
+        article: {
+          ...row,
+          tags: this.parseTags(row.tags),
+          author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Principal',
+        },
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve public article', 500, error);
     }
   };
 
