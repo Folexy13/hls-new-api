@@ -65,6 +65,7 @@ model User {
   userId        String?        @unique
   podcasts      Podcast[]
   articles      Article[]
+  articleComments ArticleComment[]
   supplements   Supplement[]
   researcherPacks ResearcherPack[]
   operationalPaymentsMade OperationalPayment[] @relation("OperationalPaymentMaker")
@@ -149,8 +150,27 @@ model Article {
   tags        Json?
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments    ArticleComment[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ArticleComment {
+  id        Int      @id @default(autoincrement())
+  body      String   @db.Text
+  articleId Int
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  Int?
+  parent    ArticleComment?  @relation("ArticleCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ArticleComment[] @relation("ArticleCommentReplies")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([articleId])
+  @@index([userId])
+  @@index([parentId])
 }
 
 model Supplement {
