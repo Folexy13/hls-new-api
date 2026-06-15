@@ -31,6 +31,10 @@ const ArticleSchema = z.object({
   tags: ContentTagsSchema,
 });
 
+const ArticleCommentSchema = z.object({
+  body: z.string().trim().min(2).max(2000),
+});
+
 const PodcastSchema = z.object({
   title: z.string().trim().min(3),
   description: z.string().trim().min(10),
@@ -44,6 +48,19 @@ const PodcastSchema = z.object({
 });
 
 type ContentKind = 'articles' | 'podcasts';
+
+type ArticleCommentRow = {
+  id: number;
+  body: string;
+  articleId: number;
+  userId: number;
+  parentId: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
+};
 
 @injectable()
 export class ContentController {
@@ -100,6 +117,38 @@ export class ContentController {
       .map((value) => String(value || '').trim().toLowerCase())
       .filter(Boolean)
       .some((value) => benfekTags.has(value));
+  }
+
+  private formatArticleComments(rows: ArticleCommentRow[]) {
+    const commentsById = new Map<number, any>();
+    const topLevelComments: any[] = [];
+
+    rows.forEach((row) => {
+      const comment = {
+        id: row.id,
+        body: row.body,
+        articleId: row.articleId,
+        userId: row.userId,
+        parentId: row.parentId,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'User',
+        authorRole: row.role || 'benfek',
+        replies: [],
+      };
+      commentsById.set(row.id, comment);
+    });
+
+    commentsById.forEach((comment) => {
+      if (comment.parentId) {
+        const parent = commentsById.get(comment.parentId);
+        if (parent) parent.replies.push(comment);
+        return;
+      }
+      topLevelComments.push(comment);
+    });
+
+    return topLevelComments;
   }
 
   getPrincipalArticles = async (req: AuthenticatedRequest, res: Response) => {
@@ -170,10 +219,104 @@ export class ContentController {
           ...row,
           tags: this.parseTags(row.tags),
           author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Principal',
+          authorId: row.userId,
         },
       });
     } catch (error) {
       return ResponseUtil.error(res, 'Failed to retrieve public article', 500, error);
+    }
+  };
+
+  getPublicArticleComments = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND status = 'published' LIMIT 1`,
+        articleId
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const rows = await this.prisma.$queryRawUnsafe<ArticleCommentRow[]>(
+        `SELECT c.*, u.firstName, u.lastName, u.role
+         FROM ArticleComment c
+         INNER JOIN User u ON u.id = c.userId
+         WHERE c.articleId = ?
+         ORDER BY COALESCE(c.parentId, c.id) ASC, c.parentId IS NOT NULL ASC, c.createdAt ASC`,
+        articleId
+      );
+
+      return ResponseUtil.success(res, { comments: this.formatArticleComments(rows) });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve article comments', 500, error);
+    }
+  };
+
+  createArticleComment = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND status = 'published' LIMIT 1`,
+        articleId
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const data = ArticleCommentSchema.parse(req.body);
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO ArticleComment (body, articleId, userId, createdAt, updatedAt)
+         VALUES (?, ?, ?, NOW(), NOW())`,
+        data.body,
+        articleId,
+        req.user.id
+      );
+
+      return ResponseUtil.success(res, null, 'Comment posted successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Comment must be between 2 and 2000 characters', 400, error);
+      return ResponseUtil.error(res, 'Failed to post comment', 500, error);
+    }
+  };
+
+  replyToArticleComment = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!this.ensurePrincipal(req, res)) return;
+      const articleId = Number(req.params.id);
+      const commentId = Number(req.params.commentId);
+      if (!Number.isFinite(articleId) || !Number.isFinite(commentId)) {
+        return ResponseUtil.error(res, 'Invalid article or comment id', 400);
+      }
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND userId = ? LIMIT 1`,
+        articleId,
+        req.user.id
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Only the article author can reply to comments', 403);
+
+      const parent = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM ArticleComment WHERE id = ? AND articleId = ? AND parentId IS NULL LIMIT 1`,
+        commentId,
+        articleId
+      );
+      if (!parent.length) return ResponseUtil.error(res, 'Comment not found', 404);
+
+      const data = ArticleCommentSchema.parse(req.body);
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO ArticleComment (body, articleId, userId, parentId, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        data.body,
+        articleId,
+        req.user.id,
+        commentId
+      );
+
+      return ResponseUtil.success(res, null, 'Reply posted successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Reply must be between 2 and 2000 characters', 400, error);
+      return ResponseUtil.error(res, 'Failed to post reply', 500, error);
     }
   };
 
