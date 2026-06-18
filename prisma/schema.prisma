@@ -160,8 +160,9 @@ model ArticleComment {
   body      String   @db.Text
   articleId Int
   article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName String?  @db.Text
   parentId  Int?
   parent    ArticleComment?  @relation("ArticleCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   ArticleComment[] @relation("ArticleCommentReplies")

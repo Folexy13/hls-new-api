@@ -11,7 +11,7 @@ export const createContentRoutes = (container: Container): Router => {
 
   router.get('/public/articles', authenticatedHandler(contentController.getPublicArticles));
   router.get('/public/articles/:id/comments', authenticatedHandler(contentController.getPublicArticleComments));
-  router.post('/public/articles/:id/comments', authGuard.verify(), authenticatedHandler(contentController.createArticleComment));
+  router.post('/public/articles/:id/comments', authenticatedHandler(contentController.createArticleComment));
   router.get('/public/articles/:id', authenticatedHandler(contentController.getPublicArticle));
   router.get('/principal/articles', authGuard.verify(), authenticatedHandler(contentController.getPrincipalArticles));
   router.post('/principal/articles', authGuard.verify(), authenticatedHandler(contentController.createArticle));
