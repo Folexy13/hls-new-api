@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { injectable, inject } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { z, ZodError } from 'zod';
+import { verify } from 'jsonwebtoken';
+import { config } from '../config/config';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
 import { normalizeHealthField } from '../utilities/health-field.utility';
@@ -33,6 +35,7 @@ const ArticleSchema = z.object({
 
 const ArticleCommentSchema = z.object({
   body: z.string().trim().min(2).max(2000),
+  guestName: z.string().trim().min(2).max(100).optional().nullable(),
 });
 
 const PodcastSchema = z.object({
@@ -53,7 +56,8 @@ type ArticleCommentRow = {
   id: number;
   body: string;
   articleId: number;
-  userId: number;
+  userId: number | null;
+  guestName?: string | null;
   parentId: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -119,6 +123,21 @@ export class ContentController {
       .some((value) => benfekTags.has(value));
   }
 
+  private getOptionalUserId(req: Request): number | null {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return null;
+
+    const [, token] = authHeader.split(' ');
+    if (!token) return null;
+
+    try {
+      const decoded = verify(token, config.jwtSecret) as { userId?: number };
+      return Number.isFinite(Number(decoded.userId)) ? Number(decoded.userId) : null;
+    } catch {
+      return null;
+    }
+  }
+
   private formatArticleComments(rows: ArticleCommentRow[]) {
     const commentsById = new Map<number, any>();
     const topLevelComments: any[] = [];
@@ -132,8 +151,9 @@ export class ContentController {
         parentId: row.parentId,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-        author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'User',
-        authorRole: row.role || 'benfek',
+        author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.guestName || 'Guest',
+        authorRole: row.role || 'guest',
+        isGuest: !row.userId,
         replies: [],
       };
       commentsById.set(row.id, comment);
@@ -241,7 +261,7 @@ export class ContentController {
       const rows = await this.prisma.$queryRawUnsafe<ArticleCommentRow[]>(
         `SELECT c.*, u.firstName, u.lastName, u.role
          FROM ArticleComment c
-         INNER JOIN User u ON u.id = c.userId
+         LEFT JOIN User u ON u.id = c.userId
          WHERE c.articleId = ?
          ORDER BY COALESCE(c.parentId, c.id) ASC, c.parentId IS NOT NULL ASC, c.createdAt ASC`,
         articleId
@@ -253,7 +273,7 @@ export class ContentController {
     }
   };
 
-  createArticleComment = async (req: AuthenticatedRequest, res: Response) => {
+  createArticleComment = async (req: Request, res: Response) => {
     try {
       const articleId = Number(req.params.id);
       if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
@@ -265,12 +285,20 @@ export class ContentController {
       if (!article.length) return ResponseUtil.error(res, 'Article not found', 404);
 
       const data = ArticleCommentSchema.parse(req.body);
+      const userId = this.getOptionalUserId(req);
+      const guestName = data.guestName?.trim() || null;
+
+      if (!userId && !guestName) {
+        return ResponseUtil.error(res, 'Please enter your name to comment', 400);
+      }
+
       await this.prisma.$executeRawUnsafe(
-        `INSERT INTO ArticleComment (body, articleId, userId, createdAt, updatedAt)
-         VALUES (?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO ArticleComment (body, articleId, userId, guestName, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
         data.body,
         articleId,
-        req.user.id
+        userId,
+        userId ? null : guestName
       );
 
       return ResponseUtil.success(res, null, 'Comment posted successfully', 201);
