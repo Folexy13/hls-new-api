@@ -129,6 +129,7 @@ model Podcast {
   category    String?
   duration    String?
   status      String   @default("draft")
+  scheduledAt DateTime?
   thumbnailUrl String? @db.Text
   tags        Json?
   userId      Int
