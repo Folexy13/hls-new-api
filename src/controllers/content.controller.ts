@@ -44,9 +44,10 @@ const PodcastSchema = z.object({
   host: z.string().trim().optional().nullable(),
   category: z.string().trim().min(2),
   duration: z.string().trim().optional().nullable(),
-  audioUrl: z.string().trim().optional().nullable(),
+  audioUrl: z.string().trim().min(1),
   thumbnailUrl: z.string().trim().optional().nullable(),
   status: z.enum(['draft', 'published', 'scheduled', 'archived']).default('published'),
+  scheduledAt: z.string().datetime().optional().nullable(),
   tags: ContentTagsSchema,
 });
 
@@ -500,10 +501,14 @@ export class ContentController {
     try {
       if (!this.ensurePrincipal(req, res)) return;
       const data = PodcastSchema.parse(req.body);
+      if (data.status === 'scheduled' && !data.scheduledAt) {
+        return ResponseUtil.error(res, 'Scheduled podcasts require a publish date and time', 400);
+      }
+      const scheduledAt = data.status === 'scheduled' && data.scheduledAt ? new Date(data.scheduledAt) : null;
       await this.prisma.$executeRawUnsafe(
         `INSERT INTO Podcast
-         (title, description, audioUrl, userId, host, category, duration, status, thumbnailUrl, tags, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW(), NOW())`,
+         (title, description, audioUrl, userId, host, category, duration, status, scheduledAt, thumbnailUrl, tags, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW(), NOW())`,
         data.title,
         data.description,
         data.audioUrl || null,
@@ -512,6 +517,7 @@ export class ContentController {
         data.category,
         data.duration || null,
         data.status,
+        scheduledAt,
         data.thumbnailUrl || null,
         JSON.stringify(data.tags || {})
       );
@@ -549,7 +555,11 @@ export class ContentController {
           `SELECT p.*, u.firstName, u.lastName
            FROM Podcast p
            INNER JOIN User u ON u.id = p.userId
-           WHERE p.userId = ? AND p.status = 'published'
+           WHERE p.userId = ?
+             AND (
+               p.status = 'published'
+               OR (p.status = 'scheduled' AND p.scheduledAt IS NOT NULL AND p.scheduledAt <= NOW())
+             )
            ORDER BY p.createdAt DESC`,
           principalId
         ),
