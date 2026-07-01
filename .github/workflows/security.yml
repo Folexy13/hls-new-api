@@ -81,7 +81,7 @@ jobs:
     if: always() # Run even if previous jobs failed
     steps:
       - name: Send status email
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v18
         with:
           server_address: smtp.resend.com
           server_port: 465
