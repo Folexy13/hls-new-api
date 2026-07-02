@@ -5,7 +5,7 @@ import { SupplementService } from '../services/supplement.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import { AuthenticatedRequest } from '../types/auth.types';
-import { CreateSupplementSchema, UpdateSupplementSchema } from '../DTOs/supplement.dto';
+import { CreateSupplementSchema, UpdateSupplementSchema, WholesalerPriceSchema, WholesalerUpdateSupplementSchema } from '../DTOs/supplement.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 import { cloudinaryService } from '../utilities/cloudinary.utility';
 
@@ -122,6 +122,14 @@ export class SupplementController extends BaseController {
   private ensurePrincipalRole(req: AuthenticatedRequest, res: Response): boolean {
     if (req.user.role !== 'principal') {
       ResponseUtil.error(res, 'Only principals can manage supplements', 403);
+      return false;
+    }
+    return true;
+  }
+
+  private ensureWholesalerRole(req: AuthenticatedRequest, res: Response): boolean {
+    if (req.user.role !== 'wholesaler') {
+      ResponseUtil.error(res, 'Only wholesalers can access this resource', 403);
       return false;
     }
     return true;
@@ -321,6 +329,93 @@ export class SupplementController extends BaseController {
     }
   }
 
+  async getWholesalerGallery(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const { page = 1, limit = 100 } = req.query;
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 100));
+      const { supplements, total } = await this.supplementService.findHlsGallery(pageNum, limitNum);
+
+      return ResponseUtil.success(res, {
+        supplements,
+        meta: PaginationUtil.getPaginationMetadata(total, pageNum, limitNum),
+      }, 'Wholesaler gallery retrieved');
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve wholesaler gallery', 500, error);
+    }
+  }
+
+  async saveWholesalerPrice(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return ResponseUtil.error(res, 'Invalid supplement ID', 400);
+      }
+
+      const data = WholesalerPriceSchema.parse(req.body);
+      const supplement = await this.supplementService.saveWholesalerPrice(id, {
+        id: req.user.id,
+        email: req.user.email,
+      }, data);
+
+      return ResponseUtil.success(res, { supplement }, 'Wholesaler price saved');
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 400;
+      return ResponseUtil.error(res, error, status);
+    }
+  }
+
+  async createWholesalerProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const data = CreateSupplementSchema.parse(req.body);
+      const supplement = await this.supplementService.create(req.user.id, data);
+      return ResponseUtil.success(res, { supplement }, 'Wholesaler product created successfully', 201);
+    } catch (error) {
+      return ResponseUtil.error(res, error, 400);
+    }
+  }
+
+  async updateWholesalerProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const supplementId = Number(req.params.id);
+      if (!Number.isFinite(supplementId) || supplementId <= 0) {
+        return ResponseUtil.error(res, 'Invalid supplement ID', 400);
+      }
+
+      const data = WholesalerUpdateSupplementSchema.parse(req.body);
+      const supplement = await this.supplementService.update(supplementId, req.user.id, data);
+      return ResponseUtil.success(res, { supplement }, 'Wholesaler product updated successfully');
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 400;
+      return ResponseUtil.error(res, error, status);
+    }
+  }
+
+  async deleteWholesalerProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureWholesalerRole(req, res)) return;
+
+      const supplementId = Number(req.params.id);
+      if (!Number.isFinite(supplementId) || supplementId <= 0) {
+        return ResponseUtil.error(res, 'Invalid supplement ID', 400);
+      }
+
+      await this.supplementService.delete(supplementId, req.user.id);
+      return ResponseUtil.success(res, null, 'Wholesaler product deleted successfully');
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 400;
+      return ResponseUtil.error(res, error, status);
+    }
+  }
+
   /**
    * @swagger
    * /api/v2/supplements/user:
@@ -344,7 +439,9 @@ export class SupplementController extends BaseController {
    */
   async getUserSupplements(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensurePrincipalRole(req, res)) return;
+      if (!['principal', 'wholesaler'].includes(req.user.role)) {
+        return ResponseUtil.error(res, 'Only principals and wholesalers can access their products', 403);
+      }
       const supplements = await this.supplementService.findByUserId(req.user.id);
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
@@ -548,7 +645,9 @@ export class SupplementController extends BaseController {
    */
   async uploadImage(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensurePrincipalRole(req, res)) return;
+      if (!['principal', 'wholesaler'].includes(req.user.role)) {
+        return ResponseUtil.error(res, 'Only principals and wholesalers can upload images', 403);
+      }
 
       if (!req.file) {
         return ResponseUtil.error(res, 'No image file provided', 400);
@@ -602,7 +701,9 @@ export class SupplementController extends BaseController {
    */
   async uploadImageBase64(req: AuthenticatedRequest, res: Response) {
     try {
-      if (!this.ensurePrincipalRole(req, res)) return;
+      if (!['principal', 'wholesaler'].includes(req.user.role)) {
+        return ResponseUtil.error(res, 'Only principals and wholesalers can upload images', 403);
+      }
 
       const { image } = req.body;
       if (!image) {

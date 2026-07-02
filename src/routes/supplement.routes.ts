@@ -136,6 +136,31 @@ export const createSupplementRoutes = (container: Container): Router => {
     authenticatedHandler(supplementController.getUserSupplements.bind(supplementController))
   );
 
+  router.get('/wholesaler/gallery',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getWholesalerGallery.bind(supplementController))
+  );
+
+  router.post('/wholesaler/products',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.createWholesalerProduct.bind(supplementController))
+  );
+
+  router.put('/wholesaler/products/:id',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.updateWholesalerProduct.bind(supplementController))
+  );
+
+  router.delete('/wholesaler/products/:id',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.deleteWholesalerProduct.bind(supplementController))
+  );
+
+  router.put('/wholesaler/gallery/:id/price',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.saveWholesalerPrice.bind(supplementController))
+  );
+
   /**
    * @swagger
    * /api/v2/supplements/{id}:

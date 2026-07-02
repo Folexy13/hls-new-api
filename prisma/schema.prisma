@@ -37,6 +37,9 @@ model User {
   password      String
   firstName     String
   lastName      String
+  businessName  String?        @db.Text
+  mainBranch    String?        @db.Text
+  contact       String?        @db.Text
   phone         String?        @unique
   whatsappNumber String?       @db.Text
   deliveryAddress String?      @db.Text
@@ -62,6 +65,7 @@ model User {
   userId        String?        @unique
   podcasts      Podcast[]
   articles      Article[]
+  articleComments ArticleComment[]
   supplements   Supplement[]
   researcherPacks ResearcherPack[]
   operationalPaymentsMade OperationalPayment[] @relation("OperationalPaymentMaker")
@@ -125,6 +129,7 @@ model Podcast {
   category    String?
   duration    String?
   status      String   @default("draft")
+  scheduledAt DateTime?
   thumbnailUrl String? @db.Text
   tags        Json?
   userId      Int
@@ -146,14 +151,34 @@ model Article {
   tags        Json?
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments    ArticleComment[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ArticleComment {
+  id        Int      @id @default(autoincrement())
+  body      String   @db.Text
+  articleId Int
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName String?  @db.Text
+  parentId  Int?
+  parent    ArticleComment?  @relation("ArticleCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ArticleComment[] @relation("ArticleCommentReplies")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([articleId])
+  @@index([userId])
+  @@index([parentId])
 }
 
 model Supplement {
   id          Int         @id @default(autoincrement())
   name        String
-  description String
+  description String      @db.Text
   rating      Float?
   price       Float
   stock       Int

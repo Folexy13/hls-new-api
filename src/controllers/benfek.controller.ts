@@ -694,6 +694,11 @@ export class BenfekController {
         return ResponseUtil.error(res, 'Current password is incorrect', 400);
       }
 
+      const isSamePassword = await bcrypt.compare(data.newPassword, user.password);
+      if (isSamePassword) {
+        return ResponseUtil.error(res, 'New password must be different from your current password', 400);
+      }
+
       const hashedPassword = await bcrypt.hash(data.newPassword, 10);
       await this.prisma.user.update({
         where: { id: userId },

@@ -35,5 +35,21 @@ export const CreateSupplementSchema = z.object({
   status: z.string().optional(),
 });
 export const UpdateSupplementSchema = CreateSupplementSchema.partial();
+
+export const WholesalerUpdateSupplementSchema = UpdateSupplementSchema.extend({
+  name: z.string().min(1, 'Name is required').optional(),
+  description: z.string().min(1, 'Description is required').optional(),
+  price: z.coerce.number().positive('Price must be positive').optional(),
+  stock: z.coerce.number().nonnegative('Stock cannot be negative').optional(),
+});
+
+export const WholesalerPriceSchema = z.object({
+  price: z.coerce.number().positive('Price must be greater than 0'),
+  contact: z.string().trim().optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+});
+
 export type CreateSupplementDTO = z.infer<typeof CreateSupplementSchema>;
 export type UpdateSupplementDTO = z.infer<typeof UpdateSupplementSchema>;
+export type WholesalerUpdateSupplementDTO = z.infer<typeof WholesalerUpdateSupplementSchema>;
+export type WholesalerPriceDTO = z.infer<typeof WholesalerPriceSchema>;

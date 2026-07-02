@@ -1,7 +1,9 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { injectable, inject } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { z, ZodError } from 'zod';
+import { verify } from 'jsonwebtoken';
+import { config } from '../config/config';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
 import { normalizeHealthField } from '../utilities/health-field.utility';
@@ -31,19 +33,39 @@ const ArticleSchema = z.object({
   tags: ContentTagsSchema,
 });
 
+const ArticleCommentSchema = z.object({
+  body: z.string().trim().min(2).max(2000),
+  guestName: z.string().trim().min(2).max(100).optional().nullable(),
+});
+
 const PodcastSchema = z.object({
   title: z.string().trim().min(3),
   description: z.string().trim().min(10),
   host: z.string().trim().optional().nullable(),
   category: z.string().trim().min(2),
   duration: z.string().trim().optional().nullable(),
-  audioUrl: z.string().trim().optional().nullable(),
+  audioUrl: z.string().trim().min(1),
   thumbnailUrl: z.string().trim().optional().nullable(),
   status: z.enum(['draft', 'published', 'scheduled', 'archived']).default('published'),
+  scheduledAt: z.string().datetime().optional().nullable(),
   tags: ContentTagsSchema,
 });
 
 type ContentKind = 'articles' | 'podcasts';
+
+type ArticleCommentRow = {
+  id: number;
+  body: string;
+  articleId: number;
+  userId: number | null;
+  guestName?: string | null;
+  parentId: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
+};
 
 @injectable()
 export class ContentController {
@@ -102,6 +124,54 @@ export class ContentController {
       .some((value) => benfekTags.has(value));
   }
 
+  private getOptionalUserId(req: Request): number | null {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return null;
+
+    const [, token] = authHeader.split(' ');
+    if (!token) return null;
+
+    try {
+      const decoded = verify(token, config.jwtSecret) as { userId?: number };
+      return Number.isFinite(Number(decoded.userId)) ? Number(decoded.userId) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private formatArticleComments(rows: ArticleCommentRow[]) {
+    const commentsById = new Map<number, any>();
+    const topLevelComments: any[] = [];
+
+    rows.forEach((row) => {
+      const comment = {
+        id: row.id,
+        body: row.body,
+        articleId: row.articleId,
+        userId: row.userId,
+        parentId: row.parentId,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.guestName || 'Guest',
+        authorRole: row.role || 'guest',
+        isGuest: !row.userId,
+        replies: [],
+      };
+      commentsById.set(row.id, comment);
+    });
+
+    commentsById.forEach((comment) => {
+      if (comment.parentId) {
+        const parent = commentsById.get(comment.parentId);
+        if (parent) parent.replies.push(comment);
+        return;
+      }
+      topLevelComments.push(comment);
+    });
+
+    return topLevelComments;
+  }
+
   getPrincipalArticles = async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!this.ensurePrincipal(req, res)) return;
@@ -123,6 +193,159 @@ export class ContentController {
       });
     } catch (error) {
       return ResponseUtil.error(res, 'Failed to retrieve articles', 500, error);
+    }
+  };
+
+  getPublicArticles = async (_req: Request, res: Response) => {
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT a.*, u.firstName, u.lastName
+         FROM Article a
+         INNER JOIN User u ON u.id = a.userId
+         WHERE a.status = 'published'
+         ORDER BY a.createdAt DESC`
+      );
+
+      return ResponseUtil.success(res, {
+        articles: rows.map((row) => ({
+          ...row,
+          tags: this.parseTags(row.tags),
+          author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Principal',
+        })),
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve public articles', 500, error);
+    }
+  };
+
+  getPublicArticle = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT a.*, u.firstName, u.lastName
+         FROM Article a
+         INNER JOIN User u ON u.id = a.userId
+         WHERE a.id = ? AND a.status = 'published'
+         LIMIT 1`,
+        articleId
+      );
+
+      if (!rows.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const row = rows[0];
+      return ResponseUtil.success(res, {
+        article: {
+          ...row,
+          tags: this.parseTags(row.tags),
+          author: `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'Principal',
+          authorId: row.userId,
+        },
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve public article', 500, error);
+    }
+  };
+
+  getPublicArticleComments = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND status = 'published' LIMIT 1`,
+        articleId
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const rows = await this.prisma.$queryRawUnsafe<ArticleCommentRow[]>(
+        `SELECT c.*, u.firstName, u.lastName, u.role
+         FROM ArticleComment c
+         LEFT JOIN User u ON u.id = c.userId
+         WHERE c.articleId = ?
+         ORDER BY COALESCE(c.parentId, c.id) ASC, c.parentId IS NOT NULL ASC, c.createdAt ASC`,
+        articleId
+      );
+
+      return ResponseUtil.success(res, { comments: this.formatArticleComments(rows) });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve article comments', 500, error);
+    }
+  };
+
+  createArticleComment = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      if (!Number.isFinite(articleId)) return ResponseUtil.error(res, 'Invalid article id', 400);
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND status = 'published' LIMIT 1`,
+        articleId
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Article not found', 404);
+
+      const data = ArticleCommentSchema.parse(req.body);
+      const userId = this.getOptionalUserId(req);
+      const guestName = data.guestName?.trim() || null;
+
+      if (!userId && !guestName) {
+        return ResponseUtil.error(res, 'Please enter your name to comment', 400);
+      }
+
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO ArticleComment (body, articleId, userId, guestName, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        data.body,
+        articleId,
+        userId,
+        userId ? null : guestName
+      );
+
+      return ResponseUtil.success(res, null, 'Comment posted successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Comment must be between 2 and 2000 characters', 400, error);
+      return ResponseUtil.error(res, 'Failed to post comment', 500, error);
+    }
+  };
+
+  replyToArticleComment = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!this.ensurePrincipal(req, res)) return;
+      const articleId = Number(req.params.id);
+      const commentId = Number(req.params.commentId);
+      if (!Number.isFinite(articleId) || !Number.isFinite(commentId)) {
+        return ResponseUtil.error(res, 'Invalid article or comment id', 400);
+      }
+
+      const article = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM Article WHERE id = ? AND userId = ? LIMIT 1`,
+        articleId,
+        req.user.id
+      );
+      if (!article.length) return ResponseUtil.error(res, 'Only the article author can reply to comments', 403);
+
+      const parent = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM ArticleComment WHERE id = ? AND articleId = ? AND parentId IS NULL LIMIT 1`,
+        commentId,
+        articleId
+      );
+      if (!parent.length) return ResponseUtil.error(res, 'Comment not found', 404);
+
+      const data = ArticleCommentSchema.parse(req.body);
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO ArticleComment (body, articleId, userId, parentId, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        data.body,
+        articleId,
+        req.user.id,
+        commentId
+      );
+
+      return ResponseUtil.success(res, null, 'Reply posted successfully', 201);
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Reply must be between 2 and 2000 characters', 400, error);
+      return ResponseUtil.error(res, 'Failed to post reply', 500, error);
     }
   };
 
@@ -278,10 +501,14 @@ export class ContentController {
     try {
       if (!this.ensurePrincipal(req, res)) return;
       const data = PodcastSchema.parse(req.body);
+      if (data.status === 'scheduled' && !data.scheduledAt) {
+        return ResponseUtil.error(res, 'Scheduled podcasts require a publish date and time', 400);
+      }
+      const scheduledAt = data.status === 'scheduled' && data.scheduledAt ? new Date(data.scheduledAt) : null;
       await this.prisma.$executeRawUnsafe(
         `INSERT INTO Podcast
-         (title, description, audioUrl, userId, host, category, duration, status, thumbnailUrl, tags, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW(), NOW())`,
+         (title, description, audioUrl, userId, host, category, duration, status, scheduledAt, thumbnailUrl, tags, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW(), NOW())`,
         data.title,
         data.description,
         data.audioUrl || null,
@@ -290,6 +517,7 @@ export class ContentController {
         data.category,
         data.duration || null,
         data.status,
+        scheduledAt,
         data.thumbnailUrl || null,
         JSON.stringify(data.tags || {})
       );
@@ -327,7 +555,11 @@ export class ContentController {
           `SELECT p.*, u.firstName, u.lastName
            FROM Podcast p
            INNER JOIN User u ON u.id = p.userId
-           WHERE p.userId = ? AND p.status = 'published'
+           WHERE p.userId = ?
+             AND (
+               p.status = 'published'
+               OR (p.status = 'scheduled' AND p.scheduledAt IS NOT NULL AND p.scheduledAt <= NOW())
+             )
            ORDER BY p.createdAt DESC`,
           principalId
         ),

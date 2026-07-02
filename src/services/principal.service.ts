@@ -126,6 +126,22 @@ export class PrincipalService {
       throw new Error('Principal not found');
     }
 
+    if (data.password) {
+      if (!data.currentPassword) {
+        throw new Error('Current password is required');
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(data.currentPassword, principal.password);
+      if (!isCurrentPasswordValid) {
+        throw new Error('Current password is incorrect');
+      }
+
+      const isSamePassword = await bcrypt.compare(data.password, principal.password);
+      if (isSamePassword) {
+        throw new Error('New password must be different from your current password');
+      }
+    }
+
     const email = data.email ? normalizeEmail(data.email) : undefined;
     const phone = data.phone ? normalizePhone(data.phone) : undefined;
 
