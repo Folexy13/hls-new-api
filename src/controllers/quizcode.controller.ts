@@ -3,6 +3,7 @@ import { injectable, inject } from 'inversify';
 import { BaseController } from './base.controller';
 import { QuizCodeRepository, CreateQuizCodeDTO } from '../repositories/quizcode.repository';
 import { NotificationService } from '../services/notification.service';
+import { EmailService } from '../services/email.service';
 import { ResponseUtil } from '../utilities/response.utility';
 import { Container } from 'inversify';
 import { PrismaClient } from '@prisma/client';
@@ -16,7 +17,8 @@ export class QuizCodeController extends BaseController {
     container: Container,
     @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
     @inject('PrismaClient') private prisma: PrismaClient,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(EmailService) private emailService: EmailService
   ) {
     super(container);
   }
@@ -378,6 +380,30 @@ export class QuizCodeController extends BaseController {
           });
         }
       }
+
+      const principal = await this.prisma.user.findUnique({
+        where: { id: quizCode.createdBy },
+        select: { firstName: true, lastName: true, email: true, phone: true },
+      });
+
+      await this.emailService.notifyAdmin(
+        'Benfek Quiz Completed',
+        'Benfek quiz completion details',
+        [
+          { label: 'Quiz Code', value: quizCode.code },
+          { label: 'Benfek Name', value: quizCode.benfekName || data.basics.nickname || 'N/A' },
+          { label: 'Benfek Email', value: quizCode.benfekEmail },
+          { label: 'Benfek Phone', value: quizCode.benfekPhone },
+          { label: 'Nickname', value: data.basics.nickname },
+          { label: 'Weight', value: data.basics.weight || quizCode.basicWeight },
+          { label: 'Height', value: data.basics.height || quizCode.basicHeight },
+          { label: 'Budget', value: data.preferences.budget },
+          { label: 'Preferred Drug Form', value: data.preferences.drugForm },
+          { label: 'Principal', value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() : 'N/A' },
+          { label: 'Principal Email', value: principal?.email },
+          { label: 'Completed At', value: new Date().toISOString() },
+        ]
+      ).catch(console.error);
 
       ResponseUtil.success(res, { quizCode: updated }, 'Quiz completed successfully');
     } catch (error: any) {
