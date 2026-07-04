@@ -165,6 +165,11 @@ export class EmailService {
     return this.sendEmail("admin@hlsnigeria.com", subject, htmlBody);
   }
 
+  async notifyRecipient(toEmail: string, subject: string, title: string, details: {label: string, value: any}[]): Promise<boolean> {
+    const htmlBody = this.getAdminEmailTemplate(title, details);
+    return this.sendEmail(toEmail, subject, htmlBody);
+  }
+
   /**
    * Magic Link template for Forgot Password / Reset Password
    */

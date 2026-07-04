@@ -260,6 +260,9 @@ export class AuthService {
           include: {
             creator: {
               select: {
+                firstName: true,
+                lastName: true,
+                email: true,
                 profession: true,
                 currentPlaceOfWork: true,
                 phone: true,
@@ -313,6 +316,22 @@ export class AuthService {
         { label: "Quiz Code", value: data.quizCode || 'None' }
       ]
     ).catch(console.error);
+
+    if (data.quizCode && linkedQuizCode?.creator?.email) {
+      await this.emailService.notifyRecipient(
+        linkedQuizCode.creator.email,
+        "Your Referred Benfek Completed Registration",
+        "Referred Benfek registration details",
+        [
+          { label: "Benfek Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+          { label: "Benfek Email", value: user.email },
+          { label: "Benfek Phone", value: user.phone || 'N/A' },
+          { label: "Quiz Code", value: data.quizCode },
+          { label: "Principal", value: `${linkedQuizCode.creator.firstName || ''} ${linkedQuizCode.creator.lastName || ''}`.trim() || linkedQuizCode.creator.email },
+          { label: "Registered At", value: new Date().toISOString() },
+        ]
+      ).catch(console.error);
+    }
 
     return this.createAuthResponse(user);
   }

@@ -43,14 +43,20 @@ export class PaystackController extends BaseController {
     packId: string;
     packName: string;
     quizCode: string;
-  }) {
+  }): Promise<{
+    principalId: number;
+    benfekName: string | null;
+    principalShare: number;
+    amount: number;
+    supplement: string;
+  } | null> {
     const quizCodeRecord = await this.prisma.quizCode.findUnique({
       where: { code: params.quizCode },
       select: { createdBy: true, benfekName: true },
     });
 
     if (!quizCodeRecord?.createdBy) {
-      return;
+      return null;
     }
 
     const existingCredit = await this.prisma.principalCredit.findFirst({
@@ -63,7 +69,7 @@ export class PaystackController extends BaseController {
     });
 
     if (existingCredit) {
-      return;
+      return null;
     }
 
     const wallet = await this.prisma.wallet.upsert({
@@ -95,7 +101,7 @@ export class PaystackController extends BaseController {
     );
 
     if (!Array.isArray(packRows) || packRows.length === 0) {
-      return;
+      return null;
     }
 
     const supplementSummaries = packRows.map((row) => {
@@ -167,6 +173,14 @@ export class PaystackController extends BaseController {
         items: supplementSummaries,
       })
     );
+
+    return {
+      principalId: quizCodeRecord.createdBy,
+      benfekName: quizCodeRecord.benfekName,
+      principalShare: aggregate.principalShare,
+      amount: aggregate.amount,
+      supplement: supplementSummaries.map((item) => item.line).join(', '),
+    };
   }
 
   /**
@@ -496,8 +510,9 @@ export class PaystackController extends BaseController {
           }
         }
 
+        let principalCredit: Awaited<ReturnType<typeof this.recordPrincipalCreditForPack>> = null;
         if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
-          await this.recordPrincipalCreditForPack({
+          principalCredit = await this.recordPrincipalCreditForPack({
             orderId,
             paymentId: payment.id,
             paymentReference: reference as string,
@@ -517,6 +532,34 @@ export class PaystackController extends BaseController {
           });
 
           const isPack = metadata.checkoutType === 'pack';
+          let principal: { firstName: string | null; lastName: string | null; email: string; phone: string | null } | null = null;
+          if (isPack && principalCredit?.principalId) {
+            principal = await this.prisma.user.findUnique({
+              where: { id: principalCredit.principalId },
+              select: { firstName: true, lastName: true, email: true, phone: true },
+            });
+          }
+
+          if (isPack && principal?.email) {
+            await this.emailService.notifyRecipient(
+              principal.email,
+              'Your Benfek Paid for a Nutrient Pack',
+              'Benfek pack payment details',
+              [
+                { label: 'Benfek', value: principalCredit?.benfekName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+                { label: 'Benfek Email', value: user.email },
+                { label: 'Pack Name', value: metadata.packName || 'N/A' },
+                { label: 'Pack ID', value: metadata.packId || 'N/A' },
+                { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+                { label: 'Order ID', value: String(orderId) },
+                { label: 'Payment Reference', value: reference },
+                { label: 'Amount Paid', value: `NGN ${result.data.amount / 100}` },
+                { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
+                { label: 'Supplements', value: principalCredit?.supplement || 'N/A' },
+              ]
+            ).catch(console.error);
+          }
+
           await this.emailService.notifyAdmin(
             isPack ? "New Pack Purchase" : "New Pharmacy Purchase",
             isPack ? "Purchases with pack details in my nutrient pack section" : "Purchase of item from pharmacy",
@@ -527,7 +570,11 @@ export class PaystackController extends BaseController {
               { label: "Amount", value: `₦${result.data.amount / 100}` },
               { label: "Type", value: isPack ? "Nutrient Pack" : "Pharmacy Item" },
               { label: "Pack ID", value: metadata.packId || "N/A" },
-              { label: "Pack Name", value: metadata.packName || "N/A" }
+              { label: "Pack Name", value: metadata.packName || "N/A" },
+              { label: "Quiz Code", value: metadata.quizCode || "N/A" },
+              { label: "Principal", value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() || principal.email : "N/A" },
+              { label: "Principal Email", value: principal?.email || "N/A" },
+              { label: "Principal Share", value: principalCredit ? `NGN ${principalCredit.principalShare}` : "N/A" }
             ]
           ).catch(console.error);
         }
