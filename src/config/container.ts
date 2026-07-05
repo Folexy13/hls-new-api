@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NutrientTypeRepository } from '../repositories/nutrienttype.repository';
 import { NutrientTypeService } from '../services/nutrienttype.service';
 import { NutrientTypeController } from '../controllers/nutrienttype.controller';
@@ -46,7 +47,33 @@ container.bind<Container>(Container).toConstantValue(container);
 // Initialize PrismaClient
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
-const adapter = new PrismaMariaDb(process.env.DATABASE_URL || "");
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not configured. Add it to api/.env locally and to the deployed service environment.');
+}
+
+type PrismaMariaDbConfig = ConstructorParameters<typeof PrismaMariaDb>[0];
+
+const buildMariaDbPoolConfig = (databaseUrl: string): PrismaMariaDbConfig => {
+  const url = new URL(databaseUrl);
+  const sslMode = url.searchParams.get('ssl-mode') || url.searchParams.get('sslmode');
+  const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || 5);
+
+  return {
+    host: url.hostname,
+    port: Number(url.port || 3306),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace(/^\//, ''),
+    connectionLimit,
+    connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 20000),
+    acquireTimeout: Number(process.env.DB_ACQUIRE_TIMEOUT_MS || 20000),
+    ssl: sslMode && sslMode.toLowerCase() !== 'disabled'
+      ? { rejectUnauthorized: false }
+      : undefined,
+  };
+};
+
+const adapter = new PrismaMariaDb(buildMariaDbPoolConfig(process.env.DATABASE_URL));
 const prisma = new PrismaClient({ adapter });
 container.bind<PrismaClient>('PrismaClient').toConstantValue(prisma as any);
 
