@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import "reflect-metadata";
 import express from "express";
 import morgan from "morgan";
@@ -8,7 +9,6 @@ import { createRoutes } from "./routes";
 import cors from "cors"; // Fixed the import statement
 import cron from "node-cron";
 import axios from "axios";
-import 'dotenv/config'
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -79,8 +79,8 @@ app.listen(PORT, () => {
   // Log all registered routes (colorized)
   logRoutes(apiRouter, '/api/v2');
 
-  // Cron job to keep Render instance active - runs every 6 seconds
-  cron.schedule('*/6 * * * * *', async () => {
+  // Keep Render free instances warm without flooding the app with self-requests.
+  cron.schedule('*/10 * * * *', async () => {
     try {
       const baseUrl = process.env.ENVIRONMENT === "dev" 
         ? `http://localhost:${PORT}` 
@@ -88,7 +88,7 @@ app.listen(PORT, () => {
       
       // Make a simple GET request to keep the instance alive
       await axios.get(`${baseUrl}/api/v2/ping`, {
-        timeout: 5000, // 5 second timeout
+        timeout: 5000,
         headers: {
           'User-Agent': 'Keep-Alive-Cron'
         }
