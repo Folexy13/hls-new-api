@@ -30,7 +30,7 @@ app.use(
       "https://localhost:3002",
       "http://localhost:7000",
       "https://localhost:7000"
-    ], // or an array of allowed origins
+    ],
 
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

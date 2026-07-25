@@ -123,9 +123,6 @@ export class CartController extends BaseController {
     try {
       const userId = req.user.id;
       const cart = await this.cartService.getCart(userId);
-      if (!cart) {
-        return ResponseUtil.error(res, 'Cart not found', 404);
-      }
       return ResponseUtil.success(res, { cart });
     } catch (error) {
       return ResponseUtil.error(res, error as string);

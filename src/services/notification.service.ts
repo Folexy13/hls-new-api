@@ -445,7 +445,7 @@ export class NotificationService {
     email?: string;
     missingFields: string;
   }): Promise<NotificationResult> {
-    const profileLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/profile`;
+    const profileLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/benfek/my-profile`;
     const text = `Your HLS profile needs a quick update: ${options.missingFields}. Please complete it so we can process your packs smoothly: ${profileLink}`;
 
     return this.sendWhatsAppAndEmail({

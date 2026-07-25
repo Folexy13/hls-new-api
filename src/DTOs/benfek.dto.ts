@@ -21,6 +21,7 @@ const optionalTrimmedString = z
 export const UpdateBenfekProfileSchema = z
   .object({
     email: z.string().email('Invalid email').optional(),
+    principalEmail: z.string().email('Invalid principal email').optional(),
     firstName: optionalTrimmedString,
     lastName: optionalTrimmedString,
     phone: optionalTrimmedString,
