@@ -40,9 +40,11 @@ export class CartService {
     @inject('PrismaClient') private prisma: PrismaClient
   ) {}
 
-  async getCart(userId: number): Promise<CartWithItems | null> {
-    return this.cartRepository.findByUserId(userId) as Promise<CartWithItems | null>;
-  }  async addToCart(userId: number, data: AddToCartDTO): Promise<CartWithItems> {
+  async getCart(userId: number): Promise<CartWithItems> {
+    return this.getOrCreateCart(userId);
+  }
+
+  async addToCart(userId: number, data: AddToCartDTO): Promise<CartWithItems> {
     const cart = await this.getOrCreateCart(userId);
     
     // Check if supplement exists in cart
@@ -57,7 +59,9 @@ export class CartService {
     }
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
-  }  async updateCartItem(userId: number, itemId: number, data: UpdateCartItemDTO): Promise<CartWithItems> {
+  }
+
+  async updateCartItem(userId: number, itemId: number, data: UpdateCartItemDTO): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
       throw new AppError('Cart not found', 404);
@@ -71,7 +75,9 @@ export class CartService {
     await this.cartRepository.updateItem(itemId, data.quantity);
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
-  }  async removeCartItem(userId: number, itemId: number): Promise<CartWithItems> {
+  }
+
+  async removeCartItem(userId: number, itemId: number): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
       throw new AppError('Cart not found', 404);
@@ -85,7 +91,9 @@ export class CartService {
     await this.cartRepository.removeItem(itemId);
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
-  }  async clearCart(userId: number): Promise<CartWithItems> {
+  }
+
+  async clearCart(userId: number): Promise<CartWithItems> {
     const cart = await this.cartRepository.findByUserId(userId);
     if (!cart) {
       throw new AppError('Cart not found', 404);

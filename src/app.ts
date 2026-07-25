@@ -21,18 +21,19 @@ app.use(morgan("dev")); // Adds HTTP request logging
 app.use(express.json());
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (Postman, mobile apps, server-to-server)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: [
+      "https://www.hlsnigeria.com",
+      "https://hlsnigeria.com",
+      "http://localhost:3000",
+      "https://localhost:3000",
+      "http://localhost:3001",
+      "https://localhost:3001",
+      "https://hls-testing.netlify.app",
+      "http://localhost:3002",
+      "https://localhost:3002",
+      "http://localhost:7000",
+      "https://localhost:7000"
+    ],
 
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

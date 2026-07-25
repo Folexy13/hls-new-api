@@ -1,12 +1,18 @@
 import { injectable } from "inversify";
 import { Resend } from "resend";
 import axios from "axios";
+import nodemailer, { type Transporter } from "nodemailer";
 import { config } from "../config/config";
 
 @injectable()
 export class EmailService {
   private resend: Resend;
-  private readonly fromEmail = config.email.from || "admin@hlsnigeria.com";
+  private readonly isDevelopment = process.env.NODE_ENV === "development";
+  private readonly smtpTransporter: Transporter | null;
+  private readonly fromEmail =
+    (this.isDevelopment ? config.email.user : config.email.from) || "admin@hlsnigeria.com";
+  private readonly adminRecipient =
+    (this.isDevelopment ? config.email.user : config.email.adminRecipient) || "admin@hlsnigeria.com";
 
   // Additional fallback API Keys
   private readonly ONE_SIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || "";
@@ -20,6 +26,16 @@ export class EmailService {
     // Default to the provided resend key if none provided in env
     const resendKey = process.env.RESEND_API_KEY || "";
     this.resend = new Resend(resendKey);
+    this.smtpTransporter =
+      this.isDevelopment && config.email.user && config.email.password
+        ? nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+              user: config.email.user,
+              pass: config.email.password,
+            },
+          })
+        : null;
   }
 
   /**
@@ -27,6 +43,21 @@ export class EmailService {
    */
   async sendEmail(toEmail: string, subject: string, htmlBody: string): Promise<boolean> {
     console.log(`[EmailService] Attempting to send email to ${toEmail}`);
+
+    if (this.isDevelopment && this.smtpTransporter) {
+      try {
+        await this.smtpTransporter.sendMail({
+          from: this.fromEmail,
+          to: toEmail,
+          subject,
+          html: htmlBody,
+        });
+        console.log("[EmailService] Successfully sent via Gmail SMTP");
+        return true;
+      } catch (error) {
+        console.error("[EmailService] Failed to send via Gmail SMTP:", error);
+      }
+    }
     
     // 1. Try Resend
     try {
@@ -162,7 +193,7 @@ export class EmailService {
    */
   async notifyAdmin(subject: string, title: string, details: {label: string, value: any}[]): Promise<boolean> {
     const htmlBody = this.getAdminEmailTemplate(title, details);
-    return this.sendEmail("admin@hlsnigeria.com", subject, htmlBody);
+    return this.sendEmail(this.adminRecipient, subject, htmlBody);
   }
 
   async notifyRecipient(toEmail: string, subject: string, title: string, details: {label: string, value: any}[]): Promise<boolean> {

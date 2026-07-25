@@ -14,6 +14,7 @@ import { NotificationService } from '../services/notification.service';
 import { z } from 'zod';
 import { formatHealthField } from '../utilities/health-field.utility';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
+import { ensureOperationalQuizCodeForBenfek, isSystemPrincipalEmail } from '../utilities/benfek-link.utility';
 
 const HLS_PHARMACY_NAME = 'HLS Pharmacy';
 
@@ -190,7 +191,7 @@ export class BenfekController {
               hasCurrentCondition: quizCode.hasCurrentCondition,
               currentConditions: formatHealthField((quizCode as any).currentConditions),
             },
-            principal: quizCode.creator,
+            principal: isSystemPrincipalEmail(quizCode.creator?.email) ? null : quizCode.creator,
           }
         : null,
     };
@@ -620,11 +621,74 @@ export class BenfekController {
         });
       }
 
-      const quizCode = await this.prisma.quizCode.findFirst({
+      const refreshedUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+        },
+      });
+
+      if (!refreshedUser) {
+        return ResponseUtil.error(res, 'Benfek profile not found', 404);
+      }
+
+      let quizCode = await this.prisma.quizCode.findFirst({
         where: { usedBy: userId, isUsed: true },
         orderBy: [{ usedAt: 'desc' }, { updatedAt: 'desc' }],
-        select: { id: true },
+        select: { id: true, createdBy: true, creator: { select: { email: true } } },
       });
+
+      if (!quizCode) {
+        quizCode = await ensureOperationalQuizCodeForBenfek(this.prisma, refreshedUser, {
+          createdBy: undefined,
+        }).then((created) => ({
+          id: created.id,
+          createdBy: created.createdBy,
+          creator: null as any,
+        }));
+      }
+
+      if (!quizCode) {
+        return ResponseUtil.error(res, 'Failed to create or load your benfek code.', 500);
+      }
+
+      if (typeof data.principalEmail === 'string' && data.principalEmail.trim()) {
+        const principalEmail = normalizeEmail(data.principalEmail);
+        const principal = await this.prisma.user.findFirst({
+          where: { email: principalEmail, role: 'principal' },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        });
+
+        if (!principal) {
+          return ResponseUtil.error(res, 'No principal account was found with that email.', 404);
+        }
+
+        if (
+          quizCode.createdBy !== principal.id &&
+          !isSystemPrincipalEmail(quizCode.creator?.email)
+        ) {
+          return ResponseUtil.error(res, 'Your account is already linked to a principal.', 409);
+        }
+
+        await this.prisma.quizCode.update({
+          where: { id: quizCode.id },
+          data: {
+            createdBy: principal.id,
+            benfekName: data.benfekName || `${refreshedUser.firstName} ${refreshedUser.lastName}`.trim(),
+            benfekEmail: refreshedUser.email,
+            benfekPhone: normalizePhone(refreshedUser.phone),
+          },
+        });
+      }
 
       if (quizCode) {
         const quizData: Record<string, unknown> = {};
