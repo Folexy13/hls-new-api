@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import "reflect-metadata";
 import express from "express";
+import { config } from "./config/config";
 import morgan from "morgan";
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
@@ -10,8 +11,10 @@ import cors from "cors"; // Fixed the import statement
 import cron from "node-cron";
 import axios from "axios";
 const PORT = process.env.PORT || 3000;
-
+const allowedOrigins =config.corsAllowedOrigins;
 const app = express();
+
+
 
 // Middleware
 app.use(morgan("dev")); // Adds HTTP request logging

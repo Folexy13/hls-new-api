@@ -1,6 +1,9 @@
 import 'dotenv/config';
 
 export const config = {
+  corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(",").map(origin => origin.trim())
+    : [],
   jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
   jwtExpiry: process.env.JWT_EXPIRY || '1h',
