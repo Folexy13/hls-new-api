@@ -36,6 +36,12 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return { supplements: result.items, total: result.total };
   }
 
+  async findHlsGallery(page: number = 1, limit: number = 100): Promise<{ supplements: Supplement[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const result = await this.supplementRepository.findHlsGallery(skip, limit);
+    return { supplements: result.items, total: result.total };
+  }
+
   async findById(id: number): Promise<Supplement | null> {
     return this.supplementRepository.findById(id);
   }
