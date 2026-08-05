@@ -318,7 +318,13 @@ export class SupplementController extends BaseController {
       const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
       const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
       const roleFilter = typeof role === 'string' && role.toLowerCase() === 'researcher' ? 'researcher' : undefined;
-      const { supplements, total } = await this.supplementService.findAll(pageNum, limitNum, undefined, roleFilter);
+      const { supplements, total } = await this.supplementService.findAll(
+        pageNum,
+        limitNum,
+        undefined,
+        roleFilter,
+        true,
+      );
 
       return ResponseUtil.success(res, {
         supplements,

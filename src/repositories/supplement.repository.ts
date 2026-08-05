@@ -24,10 +24,12 @@ export class SupplementRepository {
     take?: number,
     userId?: number,
     userRole?: string,
+    pricedOnly?: boolean,
   ): Promise<{ items: SupplementWithUser[]; total: number }> {
     const where: Prisma.SupplementWhereInput = {
       ...(userId ? { userId } : {}),
       ...(userRole ? { user: { is: { role: userRole as any } } } : {}),
+      ...(pricedOnly ? { price: { gt: 0 } } : {}),
     };
     
     const [supplements, total] = await Promise.all([

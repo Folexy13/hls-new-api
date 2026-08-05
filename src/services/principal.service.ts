@@ -7,6 +7,7 @@ import { WithdrawalRepository } from '../repositories/withdrawal.repository';
 import { QuizCodeRepository } from '../repositories/quizcode.repository';
 import { CreateBenfekRecordDTO, CreateBenfekUserDTO, CreatePrincipalUserDTO, UpdatePrincipalUserDTO } from '../DTOs/principal.dto';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
+import { EmailService } from './email.service';
 
 @injectable()
 export class PrincipalService {
@@ -15,7 +16,8 @@ export class PrincipalService {
     @inject(PrincipalRepository) private principalRepository: PrincipalRepository,
     @inject(WalletRepository) private walletRepository: WalletRepository,
     @inject(WithdrawalRepository) private withdrawalRepository: WithdrawalRepository,
-    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository
+    @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
+    @inject(EmailService) private emailService: EmailService
   ) {}
 
   async createBenfekRecord(principalId: number, data: CreateBenfekRecordDTO) {
@@ -69,6 +71,20 @@ export class PrincipalService {
       accountNumber: data.accountNumber,
       accountName: data.accountName,
     });
+
+    await this.emailService.notifyAdmin(
+      'New Principal Onboarded',
+      'Principal onboarding details',
+      [
+        { label: 'Name', value: `${user.firstName || ''} ${user.lastName || ''}`.trim() },
+        { label: 'Email', value: user.email },
+        { label: 'Phone', value: user.phone },
+        { label: 'Profession', value: user.profession },
+        { label: 'Current place of work', value: user.currentPlaceOfWork },
+        { label: 'License number', value: user.licenseNumber },
+        { label: 'Preferred payment method', value: user.preferredPaymentMethod },
+      ]
+    ).catch(console.error);
 
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;

@@ -196,8 +196,6 @@ export class QuizCodeRepository {
         lifestylePriority: data.lifestylePriority,
         preferenceDrugForm: data.preferenceDrugForm,
         preferenceBudget: data.preferenceBudget,
-        isUsed: true,
-        usedAt: new Date(),
       },
     });
   }

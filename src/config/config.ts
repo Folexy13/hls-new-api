@@ -21,6 +21,9 @@ export const config = {
     apiUrl: process.env.EMAIL_API_URL || '',
     apiKey: process.env.EMAIL_API_KEY || '',
     from: process.env.EMAIL_FROM || 'admin@hlsnigeria.com',
+    user: process.env.EMAIL_USER || '',
+    password: process.env.EMAIL_PASSWORD || '',
+    adminRecipient: process.env.EMAIL_ADMIN || 'admin@hlsnigeria.com',
   },
   aws: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,

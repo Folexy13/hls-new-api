@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import "reflect-metadata";
 import express from "express";
 import { config } from "./config/config";
@@ -9,7 +10,6 @@ import { createRoutes } from "./routes";
 import cors from "cors"; // Fixed the import statement
 import cron from "node-cron";
 import axios from "axios";
-import 'dotenv/config'
 const PORT = process.env.PORT || 3000;
 const allowedOrigins =config.corsAllowedOrigins;
 const app = express();
@@ -21,18 +21,19 @@ app.use(morgan("dev")); // Adds HTTP request logging
 app.use(express.json());
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (Postman, mobile apps, server-to-server)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: [
+      "https://www.hlsnigeria.com",
+      "https://hlsnigeria.com",
+      "http://localhost:3000",
+      "https://localhost:3000",
+      "http://localhost:3001",
+      "https://localhost:3001",
+      "https://hls-testing.netlify.app",
+      "http://localhost:3002",
+      "https://localhost:3002",
+      "http://localhost:7000",
+      "https://localhost:7000"
+    ],
 
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -81,8 +82,8 @@ app.listen(PORT, () => {
   // Log all registered routes (colorized)
   logRoutes(apiRouter, '/api/v2');
 
-  // Cron job to keep Render instance active - runs every 6 seconds
-  cron.schedule('*/6 * * * * *', async () => {
+  // Keep Render free instances warm without flooding the app with self-requests.
+  cron.schedule('*/10 * * * *', async () => {
     try {
       const baseUrl = process.env.ENVIRONMENT === "dev" 
         ? `http://localhost:${PORT}` 
@@ -90,7 +91,7 @@ app.listen(PORT, () => {
       
       // Make a simple GET request to keep the instance alive
       await axios.get(`${baseUrl}/api/v2/ping`, {
-        timeout: 5000, // 5 second timeout
+        timeout: 5000,
         headers: {
           'User-Agent': 'Keep-Alive-Cron'
         }

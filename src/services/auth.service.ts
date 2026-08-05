@@ -10,6 +10,7 @@ import { NotificationService } from "../services/notification.service";
 import { EmailService } from "./email.service";
 import crypto from "crypto";
 import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
+import { ensureOperationalQuizCodeForBenfek } from "../utilities/benfek-link.utility";
 
 const HLS_PHARMACY_NAME = "HLS Pharmacy";
 
@@ -108,6 +109,18 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedError("Invalid email or password.");
+    }
+
+    if (user.role === "benfek") {
+      await ensureOperationalQuizCodeForBenfek(this.prisma, {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+      }).catch((error) => {
+        console.error("Failed to auto-link benfek quiz code on login:", error);
+      });
     }
 
     await this.notificationService.notifyPreferredVendorAcceptance(user).catch(() => undefined);
@@ -260,6 +273,9 @@ export class AuthService {
           include: {
             creator: {
               select: {
+                firstName: true,
+                lastName: true,
+                email: true,
                 profession: true,
                 currentPlaceOfWork: true,
                 phone: true,
@@ -287,32 +303,66 @@ export class AuthService {
       preferredPharmacyPhone: defaultPharmacy.preferredPharmacyPhone || undefined,
     });
 
+    let operationalQuizCode = null;
+
     if (data.quizCode) {
       await this.prisma.quizCode.updateMany({
         where: {
           code: data.quizCode,
-          isUsed: true,
           OR: [{ usedBy: null }, { usedBy: user.id }],
         },
         data: {
           usedBy: user.id,
+          isUsed: true,
           usedAt: new Date(),
         },
+      });
+      operationalQuizCode = await this.prisma.quizCode.findUnique({
+        where: { code: data.quizCode },
+        select: {
+          code: true,
+        },
+      });
+    } else {
+      operationalQuizCode = await ensureOperationalQuizCodeForBenfek(this.prisma, {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
       });
     }
 
     // Notify admin
     await this.emailService.notifyAdmin(
-      "New Benfek Registration (Unreferred)",
+      data.quizCode ? "New Benfek Registration (Referred)" : "New Benfek Registration (Unreferred)",
       "Complete data Details of registered benfek",
       [
         { label: "Username", value: user.username },
         { label: "Email", value: email },
         { label: "Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
         { label: "Phone", value: user.phone || 'N/A' },
-        { label: "Quiz Code", value: data.quizCode || 'None' }
+        { label: "Quiz Code", value: operationalQuizCode?.code || data.quizCode || 'None' },
+        { label: "Registration Type", value: data.quizCode ? "Referred" : "Unreferred" },
+        { label: "Principal Email", value: linkedQuizCode?.creator?.email || 'N/A' },
       ]
     ).catch(console.error);
+
+    if (data.quizCode && linkedQuizCode?.creator?.email) {
+      await this.emailService.notifyRecipient(
+        linkedQuizCode.creator.email,
+        "Your Referred Benfek Completed Registration",
+        "Referred Benfek registration details",
+        [
+          { label: "Benfek Name", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A' },
+          { label: "Benfek Email", value: user.email },
+          { label: "Benfek Phone", value: user.phone || 'N/A' },
+          { label: "Quiz Code", value: data.quizCode },
+          { label: "Principal", value: `${linkedQuizCode.creator.firstName || ''} ${linkedQuizCode.creator.lastName || ''}`.trim() || linkedQuizCode.creator.email },
+          { label: "Registered At", value: new Date().toISOString() },
+        ]
+      ).catch(console.error);
+    }
 
     return this.createAuthResponse(user);
   }
