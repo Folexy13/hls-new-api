@@ -21,6 +21,7 @@ app.use(
     origin: [
       "https://www.hlsnigeria.com",
       "https://hlsnigeria.com",
+      "https://testing.hlsnigeria.com",
       "http://localhost:3000",
       "https://localhost:3000",
       "http://localhost:3001",
@@ -29,9 +30,8 @@ app.use(
       "http://localhost:3002",
       "https://localhost:3002",
       "http://localhost:7000",
-      "https://localhost:7000"
+      "https://localhost:7000",
     ],
-
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
