@@ -6,7 +6,7 @@ import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import { container } from "./config/container";
 import { createRoutes } from "./routes";
-import cors from "cors"; // Fixed the import statement
+import cors from "cors";
 import cron from "node-cron";
 import axios from "axios";
 const PORT = process.env.PORT || 3000;

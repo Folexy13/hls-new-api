@@ -123,7 +123,6 @@ export class ResearcherController {
           health: {
             allergies: formatHealthField(quizCode.allergies),
             scares: formatHealthField(quizCode.scares),
-            familyCondition: formatHealthField(quizCode.familyCondition),
             medications: formatHealthField(quizCode.medications),
             hasCurrentCondition: quizCode.hasCurrentCondition,
             currentConditions: formatHealthField((quizCode as any).currentConditions),
