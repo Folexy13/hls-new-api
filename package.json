@@ -49,7 +49,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.0.4",
     "prisma": "7.8.0",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.12.3",
