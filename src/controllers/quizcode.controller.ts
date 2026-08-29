@@ -97,6 +97,7 @@ export class QuizCodeController extends BaseController {
       await this.notificationService
         .sendBenfekCodeMessage({
           phone: data.benfekPhone,
+          email: data.benfekEmail,
           code: quizCode.code,
           benfekName: data.benfekName,
         })
