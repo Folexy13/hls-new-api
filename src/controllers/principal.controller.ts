@@ -51,6 +51,7 @@ export class PrincipalController extends BaseController {
 
       await this.notificationService.sendBenfekCodeMessage({
         phone: data.benfekPhone,
+        email: data.benfekEmail,
         code: benfek.code,
         benfekName: data.benfekName,
       }).catch(() => undefined);
