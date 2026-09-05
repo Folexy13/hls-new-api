@@ -164,6 +164,8 @@ model ArticleComment {
   userId    Int?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   guestName String?  @db.Text
+  guestEmail String? @db.VarChar(191)
+  ownerTokenHash String? @db.VarChar(64)
   parentId  Int?
   parent    ArticleComment?  @relation("ArticleCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   ArticleComment[] @relation("ArticleCommentReplies")
@@ -173,6 +175,7 @@ model ArticleComment {
   @@index([articleId])
   @@index([userId])
   @@index([parentId])
+  @@index([guestEmail])
 }
 
 model Supplement {
