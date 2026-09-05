@@ -201,6 +201,34 @@ export class EmailService {
     return this.sendEmail(toEmail, subject, htmlBody);
   }
 
+  async sendPrincipalWelcomeEmail(toEmail: string, principalName?: string): Promise<boolean> {
+    const frontendUrl = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+    const displayName = principalName?.trim() || "Principal";
+    const subject = "Welcome to HLS Nigeria";
+    const bodyHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+        <h2 style="color: #047857; text-align: center;">Your HLS Principal Account Is Active</h2>
+        <p>Hello ${displayName},</p>
+        <p>Your principal account has been created successfully. You can now sign in to your HLS dashboard to add benfeks, manage quiz codes, and track your network activity.</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${frontendUrl}/auth/signin" style="padding: 12px 24px; background-color: #047857; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+            Sign In to HLS
+          </a>
+        </div>
+
+        <p style="font-size: 14px; color: #555;">If you did not create this account, please contact HLS support.</p>
+        <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #888;">
+          If the button does not work, copy and paste this link into your browser:<br/>
+          <a href="${frontendUrl}/auth/signin" style="color: #047857;">${frontendUrl}/auth/signin</a>
+        </p>
+      </div>
+    `;
+
+    return this.sendEmail(toEmail, subject, bodyHtml);
+  }
+
   /**
    * Magic Link template for Forgot Password / Reset Password
    */

@@ -3,6 +3,7 @@ import { injectable, inject } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { z, ZodError } from 'zod';
 import { verify } from 'jsonwebtoken';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { config } from '../config/config';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
@@ -36,6 +37,8 @@ const ArticleSchema = z.object({
 const ArticleCommentSchema = z.object({
   body: z.string().trim().min(2).max(2000),
   guestName: z.string().trim().min(2).max(100).optional().nullable(),
+  guestEmail: z.string().trim().email().max(191).optional().nullable(),
+  ownerToken: z.string().trim().min(20).max(200).optional().nullable(),
 });
 
 const PodcastSchema = z.object({
@@ -55,13 +58,15 @@ type ContentKind = 'articles' | 'podcasts';
 
 type ArticleCommentRow = {
   id: number;
-  body: string;
-  articleId: number;
+  body?: string;
+  articleId?: number;
   userId: number | null;
   guestName?: string | null;
-  parentId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
+  guestEmail?: string | null;
+  ownerTokenHash?: string | null;
+  parentId?: number | null;
+  createdAt?: Date;
+  updatedAt?: Date;
   firstName?: string | null;
   lastName?: string | null;
   role?: string | null;
@@ -139,6 +144,22 @@ export class ContentController {
     }
   }
 
+  private createOwnerToken() {
+    return randomBytes(32).toString('hex');
+  }
+
+  private hashOwnerToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private isOwnerTokenMatch(token: string | null | undefined, hash: string | null | undefined) {
+    if (!token || !hash) return false;
+    const tokenHash = this.hashOwnerToken(token);
+    const expected = Buffer.from(hash, 'hex');
+    const actual = Buffer.from(tokenHash, 'hex');
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+
   private formatArticleComments(rows: ArticleCommentRow[]) {
     const commentsById = new Map<number, any>();
     const topLevelComments: any[] = [];
@@ -149,6 +170,7 @@ export class ContentController {
         body: row.body,
         articleId: row.articleId,
         userId: row.userId,
+        guestEmail: row.userId ? null : row.guestEmail,
         parentId: row.parentId,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -288,24 +310,110 @@ export class ContentController {
       const data = ArticleCommentSchema.parse(req.body);
       const userId = this.getOptionalUserId(req);
       const guestName = data.guestName?.trim() || null;
+      const guestEmail = data.guestEmail?.trim().toLowerCase() || null;
 
       if (!userId && !guestName) {
         return ResponseUtil.error(res, 'Please enter your name to comment', 400);
       }
 
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO ArticleComment (body, articleId, userId, guestName, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, NOW(), NOW())`,
-        data.body,
-        articleId,
-        userId,
-        userId ? null : guestName
-      );
+      if (!userId && !guestEmail) {
+        return ResponseUtil.error(res, 'Please enter your email address to comment', 400);
+      }
 
-      return ResponseUtil.success(res, null, 'Comment posted successfully', 201);
+      const ownerToken = this.createOwnerToken();
+      const created = await this.prisma.articleComment.create({
+        data: {
+          body: data.body,
+          articleId,
+          userId,
+          guestName: userId ? null : guestName,
+          guestEmail: userId ? null : guestEmail,
+          ownerTokenHash: this.hashOwnerToken(ownerToken),
+        },
+        select: { id: true },
+      } as any);
+
+      return ResponseUtil.success(res, { commentId: created.id, ownerToken }, 'Comment posted successfully', 201);
     } catch (error) {
       if (error instanceof ZodError) return ResponseUtil.error(res, 'Comment must be between 2 and 2000 characters', 400, error);
       return ResponseUtil.error(res, 'Failed to post comment', 500, error);
+    }
+  };
+
+  updateArticleComment = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      const commentId = Number(req.params.commentId);
+      if (!Number.isFinite(articleId) || !Number.isFinite(commentId)) {
+        return ResponseUtil.error(res, 'Invalid article or comment id', 400);
+      }
+
+      const data = ArticleCommentSchema.pick({ body: true, ownerToken: true }).parse(req.body);
+      const userId = this.getOptionalUserId(req);
+      const rows = await this.prisma.$queryRawUnsafe<ArticleCommentRow[]>(
+        `SELECT id, userId, ownerTokenHash FROM ArticleComment WHERE id = ? AND articleId = ? LIMIT 1`,
+        commentId,
+        articleId
+      );
+      if (!rows.length) return ResponseUtil.error(res, 'Comment not found', 404);
+
+      const comment = rows[0];
+      const canManage = comment.userId
+        ? Boolean(userId && Number(comment.userId) === Number(userId))
+        : this.isOwnerTokenMatch(data.ownerToken, comment.ownerTokenHash);
+
+      if (!canManage) return ResponseUtil.error(res, 'You can only edit your own comment', 403);
+
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE ArticleComment SET body = ?, updatedAt = NOW() WHERE id = ? AND articleId = ?`,
+        data.body,
+        commentId,
+        articleId
+      );
+
+      return ResponseUtil.success(res, null, 'Comment updated successfully');
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Comment must be between 2 and 2000 characters', 400, error);
+      return ResponseUtil.error(res, 'Failed to update comment', 500, error);
+    }
+  };
+
+  deleteArticleComment = async (req: Request, res: Response) => {
+    try {
+      const articleId = Number(req.params.id);
+      const commentId = Number(req.params.commentId);
+      if (!Number.isFinite(articleId) || !Number.isFinite(commentId)) {
+        return ResponseUtil.error(res, 'Invalid article or comment id', 400);
+      }
+
+      const data = z.object({
+        ownerToken: z.string().trim().min(20).max(200).optional().nullable(),
+      }).parse(req.body || {});
+      const userId = this.getOptionalUserId(req);
+      const rows = await this.prisma.$queryRawUnsafe<ArticleCommentRow[]>(
+        `SELECT id, userId, ownerTokenHash FROM ArticleComment WHERE id = ? AND articleId = ? LIMIT 1`,
+        commentId,
+        articleId
+      );
+      if (!rows.length) return ResponseUtil.error(res, 'Comment not found', 404);
+
+      const comment = rows[0];
+      const canManage = comment.userId
+        ? Boolean(userId && Number(comment.userId) === Number(userId))
+        : this.isOwnerTokenMatch(data.ownerToken, comment.ownerTokenHash);
+
+      if (!canManage) return ResponseUtil.error(res, 'You can only delete your own comment', 403);
+
+      await this.prisma.$executeRawUnsafe(
+        `DELETE FROM ArticleComment WHERE id = ? AND articleId = ?`,
+        commentId,
+        articleId
+      );
+
+      return ResponseUtil.success(res, null, 'Comment deleted successfully');
+    } catch (error) {
+      if (error instanceof ZodError) return ResponseUtil.error(res, 'Invalid comment ownership token', 400, error);
+      return ResponseUtil.error(res, 'Failed to delete comment', 500, error);
     }
   };
 

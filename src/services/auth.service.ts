@@ -95,6 +95,11 @@ export class AuthService {
           { label: "Role", value: user.role }
         ]
       ).catch(console.error);
+
+      await this.emailService.sendPrincipalWelcomeEmail(
+        user.email,
+        `${user.firstName || ''} ${user.lastName || ''}`.trim()
+      ).catch(console.error);
     }
 
     return this.createAuthResponse(user);
