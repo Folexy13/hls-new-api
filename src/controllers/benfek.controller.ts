@@ -3,6 +3,7 @@ import { injectable, inject } from 'inversify';
 import { PrismaClient } from '@prisma/client';
 import { ZodError } from 'zod';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
 import {
@@ -65,6 +66,22 @@ export class BenfekController {
     @inject(NotificationService) private notificationService: NotificationService,
     @inject(EmailService) private emailService: EmailService
   ) {}
+
+  private buildPackFingerprint(items: Array<{
+    supplementId: number;
+    quantity: number;
+    supplement: { price: number };
+  }>) {
+    const normalized = items
+      .map((item) => ({
+        supplementId: Number(item.supplementId),
+        quantity: Number(item.quantity || 1),
+        price: Number(item.supplement.price || 0),
+      }))
+      .sort((a, b) => a.supplementId - b.supplementId);
+
+    return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+  }
 
   private async buildProfile(userId: number) {
     const user = await this.prisma.user.findUnique({
@@ -259,8 +276,15 @@ export class BenfekController {
               status: 'dispatched',
             },
             select: {
+              id: true,
               packId: true,
-              items: { select: { id: true } },
+              items: {
+                select: {
+                  supplementId: true,
+                  quantity: true,
+                  supplement: { select: { price: true } },
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -274,12 +298,28 @@ export class BenfekController {
       select: { metadata: true },
     });
     const paidPackIds = new Set<string>();
+    const paidPackSnapshots = new Set<string>();
     for (const payment of successfulPackPayments) {
       if (!payment.metadata) continue;
       try {
-        const metadata = JSON.parse(payment.metadata) as { packId?: unknown };
-        if (typeof metadata.packId === 'string' && metadata.packId.trim()) {
+        const metadata = JSON.parse(payment.metadata) as {
+          packDbId?: unknown;
+          packId?: unknown;
+          packSnapshotFingerprint?: unknown;
+        };
+        if (
+          typeof metadata.packId === 'string' &&
+          metadata.packId.trim() &&
+          !metadata.packSnapshotFingerprint
+        ) {
           paidPackIds.add(metadata.packId.trim());
+        }
+        if (
+          metadata.packDbId &&
+          typeof metadata.packSnapshotFingerprint === 'string' &&
+          metadata.packSnapshotFingerprint.trim()
+        ) {
+          paidPackSnapshots.add(`${Number(metadata.packDbId)}:${metadata.packSnapshotFingerprint}`);
         }
       } catch {
         // Ignore malformed payment metadata.
@@ -287,7 +327,12 @@ export class BenfekController {
     }
 
     const unpaidReadyPackCount = readyPacks.filter(
-      (pack) => pack.items.length > 0 && !paidPackIds.has(pack.packId)
+      (pack) => {
+        if (pack.items.length === 0) return false;
+        const fingerprint = this.buildPackFingerprint(pack.items);
+        if (paidPackSnapshots.has(`${pack.id}:${fingerprint}`)) return false;
+        return !paidPackIds.has(pack.packId);
+      }
     ).length;
 
     const missingProfileFields = [
@@ -875,6 +920,8 @@ export class BenfekController {
       const paymentByPackId = new Map<
         string,
         {
+          packDbId: number | null;
+          packSnapshotFingerprint: string | null;
           status: string;
           paidAt: Date | null;
           paystackReference: string | null;
@@ -887,11 +934,20 @@ export class BenfekController {
         if (!payment.metadata) continue;
 
         try {
-          const metadata = JSON.parse(payment.metadata) as { packId?: unknown };
+          const metadata = JSON.parse(payment.metadata) as {
+            packDbId?: unknown;
+            packId?: unknown;
+            packSnapshotFingerprint?: unknown;
+          };
           const packId = typeof metadata.packId === 'string' ? metadata.packId.trim() : '';
           if (!packId || paymentByPackId.has(packId)) continue;
 
           paymentByPackId.set(packId, {
+            packDbId: Number(metadata.packDbId) || null,
+            packSnapshotFingerprint:
+              typeof metadata.packSnapshotFingerprint === 'string'
+                ? metadata.packSnapshotFingerprint
+                : null,
             status: payment.status,
             paidAt: payment.paidAt,
             paystackReference: payment.paystackReference ?? null,
@@ -905,10 +961,20 @@ export class BenfekController {
 
       const packsWithPaymentState = packs.map((pack) => {
         const payment = paymentByPackId.get(pack.packId);
+        const currentFingerprint = this.buildPackFingerprint(pack.items);
+        const matchesCurrentPack =
+          !!payment &&
+          (
+            !payment.packSnapshotFingerprint ||
+            (
+              payment.packDbId === pack.id &&
+              payment.packSnapshotFingerprint === currentFingerprint
+            )
+          );
 
         return {
           ...pack,
-          payment: payment
+          payment: matchesCurrentPack && payment
             ? {
                 isPaid: true,
                 ...payment,
