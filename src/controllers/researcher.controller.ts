@@ -498,6 +498,7 @@ export class ResearcherController {
 
         await this.notificationService.sendPackAvailableMessage({
           phone: quizCode.benfekPhone,
+          email: quizCode.benfekEmail || undefined,
           packName: result.packName,
           code: data.code,
         }).catch(() => undefined);

@@ -15,7 +15,11 @@ const app = express();
 
 // Middleware
 app.use(morgan("dev")); // Adds HTTP request logging
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(
   cors({
     origin: [

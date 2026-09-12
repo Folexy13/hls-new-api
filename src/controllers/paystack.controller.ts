@@ -1,6 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 import { PaystackService } from '../services/paystack.service';
 import { CartService } from '../services/cart.service';
 import { PaystackRepository } from '../repositories/paystack.repository';
@@ -18,6 +19,7 @@ import {
 } from '../DTOs/paystack.dto';
 import { computePrincipalCredit } from '../utilities/principal-credit.utility';
 import { ResponseUtil } from '../utilities/response.utility';
+import { config } from '../config/config';
  
 import { EmailService } from '../services/email.service';
 
@@ -36,10 +38,44 @@ export class PaystackController extends BaseController {
     super(container);
   }
 
+  private buildPackFingerprint(items: Array<{
+    supplementId: number;
+    quantity: number;
+    supplement: { price: number };
+  }>) {
+    const normalized = items
+      .map((item) => ({
+        supplementId: Number(item.supplementId),
+        quantity: Number(item.quantity || 1),
+        price: Number(item.supplement.price || 0),
+      }))
+      .sort((a, b) => a.supplementId - b.supplementId);
+
+    return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+  }
+
+  private isValidPaystackSignature(req: any) {
+    const signature = String(req.headers['x-paystack-signature'] || '');
+
+    if (!signature || !req.rawBody || !config.paystack.secretKey) {
+      return false;
+    }
+
+    const expected = crypto
+      .createHmac('sha512', config.paystack.secretKey)
+      .update(req.rawBody)
+      .digest('hex');
+    const signatureBuffer = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+
+    return signatureBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+  }
+
   private async recordPrincipalCreditForPack(params: {
     orderId: number;
     paymentId: number;
     paymentReference: string;
+    packDbId?: number;
     packId: string;
     packName: string;
     quizCode: string;
@@ -147,11 +183,12 @@ export class PaystackController extends BaseController {
 
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO PrincipalCredit
-      (principalId, walletId, quizCode, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unresolved', ?, NOW(), NOW())`,
+      (principalId, walletId, quizCode, packDbId, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unresolved', ?, NOW(), NOW())`,
       quizCodeRecord.createdBy,
       wallet.id,
       params.quizCode,
+      params.packDbId || null,
       params.packId,
       params.packName,
       quizCodeRecord.benfekName,
@@ -169,6 +206,7 @@ export class PaystackController extends BaseController {
       JSON.stringify({
         packName: params.packName,
         packId: params.packId,
+        packDbId: params.packDbId || null,
         benfekName: quizCodeRecord.benfekName,
         items: supplementSummaries,
       })
@@ -180,6 +218,214 @@ export class PaystackController extends BaseController {
       principalShare: aggregate.principalShare,
       amount: aggregate.amount,
       supplement: supplementSummaries.map((item) => item.line).join(', '),
+    };
+  }
+
+  private async processPaystackCharge(paystackData: Record<string, any>, reference: string, verifiedByUserId?: number) {
+    const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference);
+    const metadata = (paystackData.metadata || {}) as Record<string, any>;
+    const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
+    const paymentUserId = Number(existingPayment?.userId || metadata.userId || 0);
+
+    if (!orderId || !paymentUserId) {
+      throw new Error('Payment details are incomplete. Please start checkout again.');
+    }
+
+    if (verifiedByUserId && paymentUserId !== verifiedByUserId) {
+      const error = new Error('This payment reference does not belong to your account.');
+      (error as any).statusCode = 403;
+      throw error;
+    }
+
+    const order = await this.orderRepository.findById(orderId);
+    if (!order || order.userId !== paymentUserId) {
+      const error = new Error('Payment order was not found for this account.');
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    if (existingPayment && existingPayment.status !== 'pending') {
+      return {
+        orderId,
+        orderNumber: metadata.orderNumber,
+        amount: existingPayment.amount,
+        status: existingPayment.status,
+        channel: existingPayment.paystackChannel,
+        checkoutType: metadata.checkoutType || 'cart',
+        packId: metadata.packId || null,
+        packName: metadata.packName || null,
+        paystackReference: reference,
+        paystackTransactionId: existingPayment.paystackTransactionId,
+        alreadyProcessed: true,
+      };
+    }
+
+    if (paystackData.status === 'success') {
+      await this.orderRepository.updateStatus(orderId, 'paid');
+
+      const payment = await this.paystackRepository.upsertPaymentByOrderId({
+        userId: paymentUserId,
+        orderId,
+        amount: Number(paystackData.amount || 0) / 100,
+        method: 'paystack',
+        status: 'success',
+        paystackReference: reference,
+        paystackTransactionId: paystackData.id ? String(paystackData.id) : undefined,
+        paystackChannel: paystackData.channel,
+        currency: paystackData.currency || 'NGN',
+        paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
+        metadata: JSON.stringify({
+          ...metadata,
+          verify: paystackData,
+          paystackReference: reference,
+          paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
+        }),
+      });
+
+      if (metadata.checkoutType !== 'pack') {
+        if (order.items) {
+          for (const item of order.items) {
+            await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
+          }
+        }
+
+        try {
+          await this.cartService.clearCart(paymentUserId);
+        } catch (cartError: any) {
+          if (cartError?.message !== 'Cart not found') {
+            throw cartError;
+          }
+        }
+      }
+
+      let principalCredit: Awaited<ReturnType<typeof this.recordPrincipalCreditForPack>> = null;
+      if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
+        principalCredit = await this.recordPrincipalCreditForPack({
+          orderId,
+          paymentId: payment.id,
+          paymentReference: reference,
+          packDbId: Number(metadata.packDbId) || undefined,
+          packId: String(metadata.packId),
+          packName: String(metadata.packName),
+          quizCode: String(metadata.quizCode),
+        });
+      }
+
+      const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
+      if (user) {
+        await this.notificationService.sendPaymentSuccessfulMessage({
+          phone: user.phone || undefined,
+          email: user.email,
+          orderNumber: metadata.orderNumber || String(orderId),
+          amount: Number(paystackData.amount || 0) / 100,
+        });
+
+        const isPack = metadata.checkoutType === 'pack';
+        let principal: { firstName: string | null; lastName: string | null; email: string; phone: string | null } | null = null;
+        if (isPack && principalCredit?.principalId) {
+          principal = await this.prisma.user.findUnique({
+            where: { id: principalCredit.principalId },
+            select: { firstName: true, lastName: true, email: true, phone: true },
+          });
+        }
+
+        if (isPack && principal?.email) {
+          await this.emailService.notifyRecipient(
+            principal.email,
+            'Your Benfek Paid for a Nutrient Pack',
+            'Benfek pack payment details',
+            [
+              { label: 'Benfek', value: principalCredit?.benfekName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+              { label: 'Benfek Email', value: user.email },
+              { label: 'Pack Name', value: metadata.packName || 'N/A' },
+              { label: 'Pack ID', value: metadata.packId || 'N/A' },
+              { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+              { label: 'Order ID', value: String(orderId) },
+              { label: 'Payment Reference', value: reference },
+              { label: 'Amount Paid', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
+              { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
+              { label: 'Supplements', value: principalCredit?.supplement || 'N/A' },
+            ]
+          ).catch(console.error);
+        }
+
+        await this.emailService.notifyAdmin(
+          isPack ? 'New Pack Purchase' : 'New Pharmacy Purchase',
+          isPack ? 'Purchases with pack details in my nutrient pack section' : 'Purchase of item from pharmacy',
+          [
+            { label: 'User', value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+            { label: 'Email', value: user.email },
+            { label: 'Order ID', value: String(orderId) },
+            { label: 'Amount', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
+            { label: 'Type', value: isPack ? 'Nutrient Pack' : 'Pharmacy Item' },
+            { label: 'Pack ID', value: metadata.packId || 'N/A' },
+            { label: 'Pack Name', value: metadata.packName || 'N/A' },
+            { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+            { label: 'Principal', value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() || principal.email : 'N/A' },
+            { label: 'Principal Email', value: principal?.email || 'N/A' },
+            { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
+          ]
+        ).catch(console.error);
+      }
+
+      return {
+        orderId,
+        orderNumber: metadata.orderNumber,
+        amount: Number(paystackData.amount || 0) / 100,
+        status: 'success',
+        channel: paystackData.channel,
+        checkoutType: metadata.checkoutType || 'cart',
+        packId: metadata.packId || null,
+        packName: metadata.packName || null,
+        paystackReference: reference,
+        paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
+        alreadyProcessed: false,
+      };
+    }
+
+    await this.orderRepository.updateStatus(orderId, 'failed');
+    let storedMetadata: Record<string, any> = {};
+    if (existingPayment?.metadata) {
+      try {
+        storedMetadata = JSON.parse(existingPayment.metadata);
+      } catch {
+        storedMetadata = {};
+      }
+    }
+
+    await this.paystackRepository.upsertPaymentByOrderId({
+      userId: paymentUserId,
+      orderId,
+      amount: paystackData.amount ? Number(paystackData.amount) / 100 : 0,
+      method: 'paystack',
+      status: 'failed',
+      paystackReference: reference,
+      paystackTransactionId: paystackData.id ? String(paystackData.id) : undefined,
+      paystackChannel: paystackData.channel,
+      currency: paystackData.currency || 'NGN',
+      metadata: JSON.stringify({
+        ...storedMetadata,
+        ...metadata,
+        verify: paystackData,
+        paystackReference: reference,
+        paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
+      }),
+    });
+
+    const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
+    if (user) {
+      await this.notificationService.sendPaymentFailedMessage({
+        phone: user.phone || undefined,
+        email: user.email,
+        orderNumber: metadata.orderNumber || String(orderId),
+      });
+    }
+
+    return {
+      orderId,
+      status: paystackData.status || 'failed',
+      gateway_response: paystackData.gateway_response,
+      checkoutType: metadata.checkoutType || 'cart',
     };
   }
 
@@ -363,6 +609,7 @@ export class PaystackController extends BaseController {
         0
       );
       const totalQuantity = pack.items.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+      const packSnapshotFingerprint = this.buildPackFingerprint(pack.items);
 
       const order = await this.orderRepository.create({
         userId,
@@ -387,8 +634,10 @@ export class PaystackController extends BaseController {
 
       const metadata = {
         checkoutType: 'pack',
+        packDbId: pack.id,
         packId: pack.packId,
         packName: pack.packName,
+        packSnapshotFingerprint,
         quizCode: pack.quizCode,
         userId,
         orderId: order.id,
@@ -454,211 +703,34 @@ export class PaystackController extends BaseController {
         return res.status(400).json({ message: 'Reference is required.' });
       }
 
-      const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference as string);
-      if (existingPayment && existingPayment.status !== 'pending') {
-        return res.status(200).json({
-          message: 'Payment already processed.',
-          data: { status: existingPayment.status, orderId: existingPayment.orderId },
-        });
-      }
-
-      const result = await PaystackService.verifyTransaction(reference as string);
-      const userId = req.user.id;
-      const metadata = (result.data.metadata || {}) as Record<string, any>;
-      const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
-
-      if (result.data.status === 'success') {
-        if (!orderId) {
-          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
-        }
-
-        await this.orderRepository.updateStatus(orderId, 'paid');
-
-        const payment = await this.paystackRepository.upsertPaymentByOrderId({
-          userId,
-          orderId,
-          amount: result.data.amount / 100,
-          method: 'paystack',
-          status: 'success',
-          paystackReference: reference as string,
-          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-          paystackChannel: result.data.channel,
-          currency: result.data.currency,
-          paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date(),
-          metadata: JSON.stringify({
-            ...metadata,
-            verify: result.data,
-            paystackReference: reference,
-            paystackTransactionId: result.data.id ? String(result.data.id) : null,
-          }),
-        });
-
-        if (metadata.checkoutType !== 'pack') {
-          const order = await this.orderRepository.findById(orderId);
-          if (order && order.items) {
-            for (const item of order.items) {
-              await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
-            }
-          }
-
-          try {
-            await this.cartService.clearCart(userId);
-          } catch (cartError: any) {
-            if (cartError?.message !== 'Cart not found') {
-              throw cartError;
-            }
-          }
-        }
-
-        let principalCredit: Awaited<ReturnType<typeof this.recordPrincipalCreditForPack>> = null;
-        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
-          principalCredit = await this.recordPrincipalCreditForPack({
-            orderId,
-            paymentId: payment.id,
-            paymentReference: reference as string,
-            packId: String(metadata.packId),
-            packName: String(metadata.packName),
-            quizCode: String(metadata.quizCode),
-          });
-        }
-
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (user) {
-          await this.notificationService.sendPaymentSuccessfulMessage({
-            phone: user.phone || undefined,
-            email: user.email,
-            orderNumber: metadata.orderNumber || String(orderId),
-            amount: result.data.amount / 100,
-          });
-
-          const isPack = metadata.checkoutType === 'pack';
-          let principal: { firstName: string | null; lastName: string | null; email: string; phone: string | null } | null = null;
-          if (isPack && principalCredit?.principalId) {
-            principal = await this.prisma.user.findUnique({
-              where: { id: principalCredit.principalId },
-              select: { firstName: true, lastName: true, email: true, phone: true },
-            });
-          }
-
-          if (isPack && principal?.email) {
-            await this.emailService.notifyRecipient(
-              principal.email,
-              'Your Benfek Paid for a Nutrient Pack',
-              'Benfek pack payment details',
-              [
-                { label: 'Benfek', value: principalCredit?.benfekName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
-                { label: 'Benfek Email', value: user.email },
-                { label: 'Pack Name', value: metadata.packName || 'N/A' },
-                { label: 'Pack ID', value: metadata.packId || 'N/A' },
-                { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
-                { label: 'Order ID', value: String(orderId) },
-                { label: 'Payment Reference', value: reference },
-                { label: 'Amount Paid', value: `NGN ${result.data.amount / 100}` },
-                { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
-                { label: 'Supplements', value: principalCredit?.supplement || 'N/A' },
-              ]
-            ).catch(console.error);
-          }
-
-          await this.emailService.notifyAdmin(
-            isPack ? "New Pack Purchase" : "New Pharmacy Purchase",
-            isPack ? "Purchases with pack details in my nutrient pack section" : "Purchase of item from pharmacy",
-            [
-              { label: "User", value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
-              { label: "Email", value: user.email },
-              { label: "Order ID", value: String(orderId) },
-              { label: "Amount", value: `₦${result.data.amount / 100}` },
-              { label: "Type", value: isPack ? "Nutrient Pack" : "Pharmacy Item" },
-              { label: "Pack ID", value: metadata.packId || "N/A" },
-              { label: "Pack Name", value: metadata.packName || "N/A" },
-              { label: "Quiz Code", value: metadata.quizCode || "N/A" },
-              { label: "Principal", value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() || principal.email : "N/A" },
-              { label: "Principal Email", value: principal?.email || "N/A" },
-              { label: "Principal Share", value: principalCredit ? `NGN ${principalCredit.principalShare}` : "N/A" }
-            ]
-          ).catch(console.error);
-        }
-
-        return res.status(200).json({
-          status: true,
-          message: 'Payment verified successfully',
-            data: {
-              orderId,
-              orderNumber: metadata.orderNumber,
-              amount: result.data.amount / 100,
-              status: 'success',
-              channel: result.data.channel,
-              checkoutType: metadata.checkoutType || 'cart',
-              packId: metadata.packId || null,
-            packName: metadata.packName || null,
-            paystackReference: reference,
-            paystackTransactionId: result.data.id ? String(result.data.id) : null,
-          },
-        });
-      } else {
-        if (!orderId) {
-          return res.status(400).json({ message: 'Payment details are incomplete. Please start checkout again.' });
-        }
-
-        await this.orderRepository.updateStatus(orderId, 'failed');
-        let storedMetadata: Record<string, any> = {};
-        if (existingPayment?.metadata) {
-          try {
-            storedMetadata = JSON.parse(existingPayment.metadata);
-          } catch {
-            storedMetadata = {};
-          }
-        }
-
-        await this.paystackRepository.upsertPaymentByOrderId({
-          userId,
-          orderId,
-          amount: result.data.amount ? result.data.amount / 100 : 0,
-          method: 'paystack',
-          status: 'failed',
-          paystackReference: reference as string,
-          paystackTransactionId: result.data.id ? String(result.data.id) : undefined,
-          paystackChannel: result.data.channel,
-          currency: result.data.currency || 'NGN',
-          metadata: JSON.stringify({
-            ...storedMetadata,
-            ...metadata,
-            verify: result.data,
-            paystackReference: reference,
-            paystackTransactionId: result.data.id ? String(result.data.id) : null,
-          }),
-        });
-
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (user) {
-          await this.notificationService.sendPaymentFailedMessage({
-            phone: user.phone || undefined,
-            email: user.email,
-            orderNumber: metadata.orderNumber || String(orderId),
+      {
+        const result = await PaystackService.verifyTransaction(reference as string);
+        const data = await this.processPaystackCharge(result.data, reference as string, req.user.id);
+        if (data.status === 'success') {
+          return res.status(200).json({
+            status: true,
+            message: 'Payment verified successfully',
+            data,
           });
         }
 
         return res.status(400).json({
           status: false,
           message: 'Payment verification failed',
-          data: {
-            status: result.data.status,
-            gateway_response: result.data.gateway_response,
-            checkoutType: metadata.checkoutType || 'cart',
-          },
+          data,
         });
       }
+
     } catch (error: any) {
       console.error('Verification error:', error);
-      return ResponseUtil.error(res, 'Unable to verify payment right now. Please try again shortly.', 500, error);
+      return ResponseUtil.error(res, error?.message || 'Unable to verify payment right now. Please try again shortly.', error?.statusCode || 500, error);
     }
   };
 
   handleWebhook = async (req: any, res: any) => {
     try {
-      const signature = req.headers['x-paystack-signature'] as string;
-      if (!signature) {
-        return res.status(400).send('No signature');
+      if (!this.isValidPaystackSignature(req)) {
+        return res.status(400).send('Invalid signature');
       }
 
       const event = req.body;
@@ -668,7 +740,12 @@ export class PaystackController extends BaseController {
 
       console.log('Received Paystack Webhook:', event.event);
 
-      if (event.event === 'transfer.success') {
+      if (event.event === 'charge.success') {
+        const reference = event.data?.reference;
+        if (reference) {
+          await this.processPaystackCharge(event.data, String(reference));
+        }
+      } else if (event.event === 'transfer.success') {
         const transferCode = event.data?.transfer_code;
         const reference = event.data?.reference;
 
