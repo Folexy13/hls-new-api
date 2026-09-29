@@ -229,6 +229,61 @@ export class EmailService {
     return this.sendEmail(toEmail, subject, bodyHtml);
   }
 
+  buildBenfekWelcomeEmail(benfekName?: string): { subject: string; htmlBody: string } {
+    const frontendUrl = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+    const displayName = this.escapeHtml(benfekName?.trim() || "Benfek");
+    const loginUrl = `${frontendUrl.replace(/\/$/, "")}/auth/signin`;
+
+    return {
+      subject: "Welcome to HLS Nigeria",
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+          <h2 style="color: #047857; text-align: center;">Welcome to HLS Nigeria</h2>
+          <p>Hello ${displayName},</p>
+          <p>Your Benfek account has been created successfully. You can now sign in to view your health journey, recommendations, and nutrient packs.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${loginUrl}" style="padding: 12px 24px; background-color: #047857; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Sign In to HLS</a>
+          </div>
+          <p style="font-size: 14px; color: #555;">If you did not create this account, please contact HLS support.</p>
+        </div>
+      `,
+    };
+  }
+
+  buildBenfekCodeEmail(code: string, benfekName?: string): { subject: string; htmlBody: string } {
+    const frontendUrl = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+    const displayName = this.escapeHtml(benfekName?.trim() || "Benfek");
+    const safeCode = this.escapeHtml(code);
+    const quizUrl = `${frontendUrl.replace(/\/$/, "")}/benfek/quiz?code=${encodeURIComponent(code)}`;
+
+    return {
+      subject: "Your HLS Benfek Code",
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+          <h2 style="color: #047857; text-align: center;">Complete Your HLS Registration</h2>
+          <p>Hello ${displayName},</p>
+          <p>A principal has invited you to complete your HLS health assessment.</p>
+          <p>Your Benfek code is:</p>
+          <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; text-align: center;">${safeCode}</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${quizUrl}" style="padding: 12px 24px; background-color: #047857; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Complete Your Assessment</a>
+          </div>
+          <p style="font-size: 14px; color: #555;">You can also enter the code manually on the Benfek registration page.</p>
+        </div>
+      `,
+    };
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    })[character] || character);
+  }
+
   /**
    * Magic Link template for Forgot Password / Reset Password
    */

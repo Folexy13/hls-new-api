@@ -56,6 +56,14 @@ export const RefreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required')
 });
 
+export const DeleteAccountSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  confirmation: z
+    .string()
+    .transform(val => val.trim())
+    .refine(val => val === 'DELETE', 'Type DELETE to confirm account deletion')
+});
+
 export const RegisterBenfekSchema = z.object({
   username: z.string().min(2, 'Username must be at least 2 characters').transform(val => val.trim()),
   email: z.string().email('Invalid email format').transform(val => val.trim()),
@@ -96,5 +104,6 @@ export const RegisterUnreferredBenfekSchema = z.object({
 export type RegisterUserDTO = z.infer<typeof RegisterUserSchema>;
 export type LoginUserDTO = z.infer<typeof LoginUserSchema>;
 export type RefreshTokenDTO = z.infer<typeof RefreshTokenSchema>;
+export type DeleteAccountDTO = z.infer<typeof DeleteAccountSchema>;
 export type RegisterBenfekDTO = z.infer<typeof RegisterBenfekSchema>;
 export type RegisterUnreferredBenfekDTO = z.infer<typeof RegisterUnreferredBenfekSchema>;

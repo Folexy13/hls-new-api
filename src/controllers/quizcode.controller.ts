@@ -10,6 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, CompleteBenfekQuizSchema } from '../DTOs/quiz.dto';
 import { formatHealthField } from '../utilities/health-field.utility';
 import { AppError } from '../utilities/errors';
+import { EmailDeliveryService } from '../services/email-delivery.service';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -18,7 +19,8 @@ export class QuizCodeController extends BaseController {
     @inject(QuizCodeRepository) private quizCodeRepository: QuizCodeRepository,
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
-    @inject(EmailService) private emailService: EmailService
+    @inject(EmailService) private emailService: EmailService,
+    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService
   ) {
     super(container);
   }
@@ -94,16 +96,12 @@ export class QuizCodeController extends BaseController {
         hasCurrentCondition: data.hasCurrentCondition ?? Boolean(data.currentConditions?.length),
       });
 
-      await this.notificationService
-        .sendBenfekCodeMessage({
-          phone: data.benfekPhone,
-          email: data.benfekEmail,
-          code: quizCode.code,
-          benfekName: data.benfekName,
-        })
-        .catch(() => undefined);
+      const emailDelivery = await this.emailDeliveryService.sendBenfekCode(quizCode);
 
-      ResponseUtil.success(res, quizCode, 'Quiz code created successfully', 201);
+      const message = emailDelivery.sent
+        ? 'Quiz code created and emailed successfully'
+        : 'Quiz code created, but the email is pending delivery';
+      ResponseUtil.success(res, { ...quizCode, emailDelivery }, message, 201);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         ResponseUtil.error(res, 'Validation failed', 400, error);
@@ -114,6 +112,44 @@ export class QuizCodeController extends BaseController {
         return;
       }
       ResponseUtil.error(res, 'Failed to create quiz code', 500, error);
+    }
+  };
+
+  resendBenfekCode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'principal') {
+        ResponseUtil.error(res, 'Only principals can resend quiz codes', 403);
+        return;
+      }
+
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        ResponseUtil.error(res, 'Invalid quiz code identifier', 400);
+        return;
+      }
+
+      const quizCode = await this.prisma.quizCode.findFirst({ where: { id, createdBy: user.id } });
+      if (!quizCode) {
+        ResponseUtil.error(res, 'Quiz code not found', 404);
+        return;
+      }
+      if (quizCode.isUsed) {
+        ResponseUtil.error(res, 'This Benfek has already completed registration', 409);
+        return;
+      }
+      if (!quizCode.benfekEmail) {
+        ResponseUtil.error(res, 'This Benfek does not have an email address', 400);
+        return;
+      }
+
+      const emailDelivery = await this.emailDeliveryService.resendBenfekCode(quizCode);
+      const message = emailDelivery.sent
+        ? 'Quiz code email sent successfully'
+        : 'Quiz code email is queued for another delivery attempt';
+      ResponseUtil.success(res, { emailDelivery }, message);
+    } catch (error) {
+      ResponseUtil.error(res, 'Failed to resend quiz code email', 500, error);
     }
   };
 
