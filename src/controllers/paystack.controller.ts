@@ -791,13 +791,14 @@ export class PaystackController extends BaseController {
             data: { status: 'failed' }
           });
           
-          // Refund wallet
-          await this.prisma.wallet.update({
-            where: { id: withdrawal.walletId },
-            data: {
-              balance: { increment: withdrawal.amount }
-            }
-          });
+          if (withdrawal.walletId) {
+            await this.prisma.wallet.update({
+              where: { id: withdrawal.walletId },
+              data: {
+                balance: { increment: withdrawal.amount }
+              }
+            });
+          }
         }
       }
 

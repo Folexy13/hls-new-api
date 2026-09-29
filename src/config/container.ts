@@ -38,6 +38,8 @@ import { ContentController } from '../controllers/content.controller';
 import { NotificationService } from '../services/notification.service';
 import { OneSignalService } from '../services/onesignal.service';
 import { EmailService } from '../services/email.service';
+import { AccountService } from '../services/account.service';
+import { EmailDeliveryService } from '../services/email-delivery.service';
 
 const container = new Container();
 
@@ -106,6 +108,8 @@ container.bind<NotificationService>(NotificationService).toSelf();
 container.bind<PrincipalService>(PrincipalService).toSelf();
 container.bind<OneSignalService>(OneSignalService).toSelf();
 container.bind<EmailService>(EmailService).toSelf();
+container.bind<AccountService>(AccountService).toSelf();
+container.bind<EmailDeliveryService>(EmailDeliveryService).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();

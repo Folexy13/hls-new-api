@@ -9,6 +9,7 @@ import { createRoutes } from "./routes";
 import cors from "cors";
 import cron from "node-cron";
 import axios from "axios";
+import { EmailDeliveryService } from "./services/email-delivery.service";
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -101,6 +102,14 @@ app.listen(PORT, () => {
       console.log(`🏓 Keep-alive ping sent at ${new Date().toISOString()}`);
     } catch (error: any) {
       console.log(`❌ Keep-alive ping failed: ${error?.message || 'Unknown error'}`);
+    }
+  });
+
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      await container.get(EmailDeliveryService).retryPending();
+    } catch (error: any) {
+      console.error('[EmailDelivery] Retry processing failed:', error?.message || error);
     }
   });
 
