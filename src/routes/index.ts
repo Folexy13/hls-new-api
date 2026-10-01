@@ -13,6 +13,7 @@ import { createPrincipalRoutes } from './principal.routes';
 import { createResearcherRoutes } from './researcher.routes';
 import { createBenfekRoutes } from './benfek.routes';
 import { createContentRoutes } from './content.routes';
+import { createWhatsAppWebhookRoutes } from './whatsapp-webhook.routes';
 
 export const createRoutes = (container: Container): Router => {
   const router = Router();
@@ -25,6 +26,8 @@ export const createRoutes = (container: Container): Router => {
    *   description: Server health check endpoints
    */
   router.get('/ping', pingController.ping.bind(pingController));
+  // Public Meta webhook. Authenticity is verified by token/signature in the controller.
+  router.use('/webhooks/whatsapp', createWhatsAppWebhookRoutes(container));
   // Mount auth routes
   router.use('/auth', createAuthRoutes(container));
   // Mount wallet routes

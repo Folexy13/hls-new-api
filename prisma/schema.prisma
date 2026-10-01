@@ -175,6 +175,27 @@ model EmailDelivery {
   @@index([recipient])
 }
 
+model WhatsAppDelivery {
+  id                Int       @id @default(autoincrement())
+  providerMessageId String    @unique @db.VarChar(191)
+  recipient         String?   @db.VarChar(64)
+  status            String    @db.VarChar(32)
+  conversationId    String?   @db.VarChar(191)
+  pricingCategory   String?   @db.VarChar(64)
+  errorCode         String?   @db.VarChar(64)
+  errorMessage      String?   @db.Text
+  eventTimestamp    DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status, eventTimestamp])
+  @@index([recipient])
+}
+
 model ArticleComment {
   id        Int      @id @default(autoincrement())
   body      String   @db.Text

@@ -40,6 +40,8 @@ import { OneSignalService } from '../services/onesignal.service';
 import { EmailService } from '../services/email.service';
 import { AccountService } from '../services/account.service';
 import { EmailDeliveryService } from '../services/email-delivery.service';
+import { WhatsAppWebhookService } from '../services/whatsapp-webhook.service';
+import { WhatsAppWebhookController } from '../controllers/whatsapp-webhook.controller';
 
 const container = new Container();
 
@@ -110,6 +112,7 @@ container.bind<OneSignalService>(OneSignalService).toSelf();
 container.bind<EmailService>(EmailService).toSelf();
 container.bind<AccountService>(AccountService).toSelf();
 container.bind<EmailDeliveryService>(EmailDeliveryService).toSelf();
+container.bind<WhatsAppWebhookService>(WhatsAppWebhookService).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();
@@ -125,5 +128,6 @@ container.bind<PrincipalController>(PrincipalController).toSelf();
 container.bind<ResearcherController>(ResearcherController).toSelf();
 container.bind<BenfekController>(BenfekController).toSelf();
 container.bind<ContentController>(ContentController).toSelf();
+container.bind<WhatsAppWebhookController>(WhatsAppWebhookController).toSelf();
 
 export { container };
