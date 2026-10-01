@@ -22,6 +22,7 @@ export const createQuizCodeRoutes = (container: Container): Router => {
   router.get('/benfeks', authGuard.verify(), quizCodeController.getMyBenfeks);
   router.get('/benfeks/:code', authGuard.verify(), quizCodeController.getBenfekQuizByCode);
   router.post('/create', authGuard.verify(), quizCodeController.createQuizCode);
+  router.post('/:id/resend-email', authGuard.verify(), quizCodeController.resendBenfekCode);
   router.get('/my-codes', authGuard.verify(), quizCodeController.getMyQuizCodes);
   router.put('/:id', authGuard.verify(), quizCodeController.updateBenfekHealthDetails);
   router.delete('/:id', authGuard.verify(), quizCodeController.deleteQuizCode);

@@ -11,6 +11,7 @@ import { EmailService } from "./email.service";
 import crypto from "crypto";
 import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 import { ensureOperationalQuizCodeForBenfek } from "../utilities/benfek-link.utility";
+import { EmailDeliveryService } from "./email-delivery.service";
 
 const HLS_PHARMACY_NAME = "HLS Pharmacy";
 
@@ -58,7 +59,8 @@ export class AuthService {
     @inject(AuthRepositoryImpl) private authRepository: AuthRepositoryImpl,
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
-    @inject(EmailService) private emailService: EmailService
+    @inject(EmailService) private emailService: EmailService,
+    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService
   ) {}
 
   async register(data: RegisterUserDTO) {
@@ -94,6 +96,11 @@ export class AuthService {
           { label: "Phone", value: user.phone },
           { label: "Role", value: user.role }
         ]
+      ).catch(console.error);
+
+      await this.emailService.sendPrincipalWelcomeEmail(
+        user.email,
+        `${user.firstName || ''} ${user.lastName || ''}`.trim()
       ).catch(console.error);
     }
 
@@ -249,7 +256,8 @@ export class AuthService {
       ]
     ).catch(console.error);
 
-    return this.createAuthResponse(user);
+    const emailDelivery = await this.emailDeliveryService.sendBenfekWelcome(user);
+    return { ...(await this.createAuthResponse(user)), emailDelivery };
   }
 
   async registerUnreferredBenfek(data: RegisterUnreferredBenfekDTO) {
@@ -364,7 +372,8 @@ export class AuthService {
       ).catch(console.error);
     }
 
-    return this.createAuthResponse(user);
+    const emailDelivery = await this.emailDeliveryService.sendBenfekWelcome(user);
+    return { ...(await this.createAuthResponse(user)), emailDelivery };
   }
 
   private async createAuthResponse(user: any) {

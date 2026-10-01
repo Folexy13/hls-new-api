@@ -86,6 +86,11 @@ export class PrincipalService {
       ]
     ).catch(console.error);
 
+    await this.emailService.sendPrincipalWelcomeEmail(
+      user.email,
+      `${user.firstName || ''} ${user.lastName || ''}`.trim()
+    ).catch(console.error);
+
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }

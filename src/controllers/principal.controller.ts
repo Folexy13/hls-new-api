@@ -5,7 +5,7 @@ import { Container } from 'inversify';
 import { ResponseUtil } from '../utilities/response.utility';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { PrincipalService } from '../services/principal.service';
-import { NotificationService } from '../services/notification.service';
+import { EmailDeliveryService } from '../services/email-delivery.service';
 import { CreateBenfekRecordSchema, CreatePrincipalUserSchema, UpdatePrincipalUserSchema } from '../DTOs/principal.dto';
 import { PaginationUtil } from '../utilities/pagination.utility';
 import { formatHealthField } from '../utilities/health-field.utility';
@@ -15,7 +15,7 @@ export class PrincipalController extends BaseController {
   constructor(
     container: Container,
     @inject(PrincipalService) private principalService: PrincipalService,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService
   ) {
     super(container);
   }
@@ -49,14 +49,12 @@ export class PrincipalController extends BaseController {
       // This allows the Benfek to use the code to register themselves later
       const benfek = await this.principalService.createBenfekRecord(req.user.id, data);
 
-      await this.notificationService.sendBenfekCodeMessage({
-        phone: data.benfekPhone,
-        email: data.benfekEmail,
-        code: benfek.code,
-        benfekName: data.benfekName,
-      }).catch(() => undefined);
+      const emailDelivery = await this.emailDeliveryService.sendBenfekCode(benfek);
       
-      return ResponseUtil.success(res, benfek, 'Benfek created and Quiz Code generated successfully', 201);
+      const message = emailDelivery.sent
+        ? 'Benfek created and quiz code emailed successfully'
+        : 'Benfek created, but the code email is pending delivery';
+      return ResponseUtil.success(res, { ...benfek, emailDelivery }, message, 201);
     } catch (error) {
       const message = (error as Error).message || 'Failed to create benfek';
       const status = (error as any).statusCode || 500;

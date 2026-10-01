@@ -10,6 +10,7 @@ import { createRoutes } from "./routes";
 import cors from "cors";
 import cron from "node-cron";
 import axios from "axios";
+import { EmailDeliveryService } from "./services/email-delivery.service";
 const PORT = process.env.PORT || 3000;
 const allowedOrigins =config.corsAllowedOrigins;
 const app = express();
@@ -18,7 +19,11 @@ const app = express();
 
 // Middleware
 app.use(morgan("dev")); // Adds HTTP request logging
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(
   cors({
     origin: [
@@ -100,6 +105,14 @@ app.listen(PORT, () => {
       console.log(`🏓 Keep-alive ping sent at ${new Date().toISOString()}`);
     } catch (error: any) {
       console.log(`❌ Keep-alive ping failed: ${error?.message || 'Unknown error'}`);
+    }
+  });
+
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      await container.get(EmailDeliveryService).retryPending();
+    } catch (error: any) {
+      console.error('[EmailDelivery] Retry processing failed:', error?.message || error);
     }
   });
 

@@ -8,17 +8,21 @@ import {
   LoginUserSchema,
   RegisterUserSchema,
   RefreshTokenSchema,
+  DeleteAccountSchema,
   RegisterBenfekSchema,
   RegisterUnreferredBenfekSchema
 } from '../DTOs/auth.dto';
 import { Container } from 'inversify';
 import { AppError } from '../utilities/errors';
+import { AuthenticatedRequest } from '../types/auth.types';
+import { AccountService } from '../services/account.service';
 
 @injectable()
 export class AuthController extends BaseController {
   constructor(
     container: Container,
-    @inject(AuthService) private authService: AuthService
+    @inject(AuthService) private authService: AuthService,
+    @inject(AccountService) private accountService: AccountService
   ) {
     super(container);
   }
@@ -263,6 +267,22 @@ export class AuthController extends BaseController {
         return ResponseUtil.error(res, error.message, error.statusCode, error);
       }
       return ResponseUtil.error(res, 'Logout failed', 500, error);
+    }
+  }
+
+  deleteOwnAccount = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const data = DeleteAccountSchema.parse(req.body);
+      const deletedAccount = await this.accountService.deleteOwnAccount(req.user.id, data.currentPassword);
+      return ResponseUtil.success(res, deletedAccount, 'Account deleted successfully');
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return ResponseUtil.error(res, 'Validation failed', 400, error);
+      }
+      if (error instanceof AppError) {
+        return ResponseUtil.error(res, error.message, error.statusCode, error);
+      }
+      return ResponseUtil.error(res, 'Account deletion failed', 500, error);
     }
   }
 

@@ -156,6 +156,46 @@ model Article {
   updatedAt   DateTime @updatedAt
 }
 
+model EmailDelivery {
+  id             Int       @id @default(autoincrement())
+  idempotencyKey String    @unique @db.VarChar(191)
+  type           String    @db.VarChar(64)
+  recipient      String    @db.VarChar(191)
+  subject        String    @db.VarChar(191)
+  htmlBody       String    @db.LongText
+  status         String    @default("pending") @db.VarChar(32)
+  attemptCount   Int       @default(0)
+  lastError      String?   @db.Text
+  sentAt         DateTime?
+  nextAttemptAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([recipient])
+}
+
+model WhatsAppDelivery {
+  id                Int       @id @default(autoincrement())
+  providerMessageId String    @unique @db.VarChar(191)
+  recipient         String?   @db.VarChar(64)
+  status            String    @db.VarChar(32)
+  conversationId    String?   @db.VarChar(191)
+  pricingCategory   String?   @db.VarChar(64)
+  errorCode         String?   @db.VarChar(64)
+  errorMessage      String?   @db.Text
+  eventTimestamp    DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status, eventTimestamp])
+  @@index([recipient])
+}
+
 model ArticleComment {
   id        Int      @id @default(autoincrement())
   body      String   @db.Text
@@ -164,6 +204,8 @@ model ArticleComment {
   userId    Int?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   guestName String?  @db.Text
+  guestEmail String? @db.VarChar(191)
+  ownerTokenHash String? @db.VarChar(64)
   parentId  Int?
   parent    ArticleComment?  @relation("ArticleCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   ArticleComment[] @relation("ArticleCommentReplies")
@@ -173,6 +215,7 @@ model ArticleComment {
   @@index([articleId])
   @@index([userId])
   @@index([parentId])
+  @@index([guestEmail])
 }
 
 model Supplement {
@@ -192,8 +235,8 @@ model Supplement {
   tags        Json?
   wholesalers Json?
   status      String      @default("in_stock")
-  userId      Int
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   cartItems   CartItem[]
   orderItems  OrderItem[]
   researcherPackItems ResearcherPackItem[]
@@ -263,8 +306,8 @@ model CartItem {
 model Order {
   id              Int         @id @default(autoincrement())
   orderNumber     String      @unique @default(uuid()) // Human-readable order reference
-  userId          Int
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   payment         Payment?
   status          String      @default("pending") // pending, paid, processing, shipped, delivered, cancelled
@@ -291,8 +334,8 @@ model OrderItem {
 
 model Payment {
   id                Int       @id @default(autoincrement())
-  userId            Int
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            Int?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   orderId           Int       @unique
   order             Order     @relation(fields: [orderId], references: [id])
   amount            Float
@@ -353,10 +396,10 @@ model Wallet {
 model Withdrawal {
   id            Int      @id @default(autoincrement())
   amount        Float
-  userId        Int
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  walletId      Int
-  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  walletId      Int?
+  wallet        Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
   status        String   @default("pending") // pending, completed, failed
   bankName      String
   accountNumber String
@@ -371,10 +414,10 @@ model Withdrawal {
 
 model PrincipalCredit {
   id            Int      @id @default(autoincrement())
-  principalId   Int
-  principal     User     @relation(fields: [principalId], references: [id], onDelete: Cascade)
-  walletId      Int
-  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  principalId   Int?
+  principal     User?    @relation(fields: [principalId], references: [id], onDelete: SetNull)
+  walletId      Int?
+  wallet        Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
   quizCode      String
   packDbId      Int?
   packId        String

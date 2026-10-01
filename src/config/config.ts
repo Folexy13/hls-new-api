@@ -15,6 +15,10 @@ export const config = {
     apiKey: process.env.WHATSAPP_API_KEY || '',
     accountSid: process.env.WHATSAPP_ACCOUNT_SID || '',
     senderPhone: process.env.WHATSAPP_SENDER_PHONE || '',
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || '',
+    appSecret: process.env.META_APP_SECRET || '',
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
   },
   email: {
     provider: process.env.EMAIL_PROVIDER || '',

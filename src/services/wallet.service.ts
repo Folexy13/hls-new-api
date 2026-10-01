@@ -19,8 +19,8 @@ interface Wallet {
 
 interface Withdrawal {
   id: number;
-  userId: number;
-  walletId: number;
+  userId: number | null;
+  walletId: number | null;
   amount: number;
   status: string;
   bankName: string;
