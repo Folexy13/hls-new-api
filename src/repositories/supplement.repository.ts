@@ -138,6 +138,32 @@ export class SupplementRepository {
     });
   }
 
+  async findImageSuggestions(query: string, limit: number) {
+    return this.prisma.supplement.findMany({
+      where: {
+        name: { contains: query },
+        imageUrl: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        manufacturer: true,
+        strength: true,
+        category: true,
+        imageUrl: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: Math.min(limit * 3, 30),
+    });
+  }
+
+  async findReusableImage(id: number) {
+    return this.prisma.supplement.findUnique({
+      where: { id },
+      select: { id: true, imageUrl: true },
+    });
+  }
+
   async findOwnedProductByName(
     userId: number,
     name: string,

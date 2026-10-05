@@ -44,11 +44,47 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return this.supplementRepository.findByUserId(userId);
   }
 
+  async findImageSuggestions(query: string, limit: number = 8) {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) return [];
+
+    const matches = await this.supplementRepository.findImageSuggestions(normalizedQuery, limit);
+    const queryLower = normalizedQuery.toLowerCase();
+    const seen = new Set<string>();
+
+    return matches
+      .sort((left, right) => {
+        const leftName = left.name.toLowerCase();
+        const rightName = right.name.toLowerCase();
+        const score = (name: string) => name === queryLower ? 0 : name.startsWith(queryLower) ? 1 : 2;
+        return score(leftName) - score(rightName);
+      })
+      .filter((item) => {
+        const imageUrl = item.imageUrl?.trim();
+        if (!imageUrl) return false;
+        const key = `${item.name.trim().toLowerCase()}::${imageUrl}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, limit);
+  }
+
+  async resolveReusableImage(sourceImageSupplementId?: number | null): Promise<string | null | undefined> {
+    if (!sourceImageSupplementId) return undefined;
+    const source = await this.supplementRepository.findReusableImage(sourceImageSupplementId);
+    if (!source?.imageUrl?.trim()) {
+      throw new AppError('The selected supplement image is no longer available', 400);
+    }
+    return source.imageUrl;
+  }
+
   async findByNameAndBrand(name: string, brand: string): Promise<Supplement[]> {
     return this.supplementRepository.findByNameAndBrand(name, brand);
   }
 
   async create(userId: number, data: CreateSupplementDTO): Promise<Supplement> {
+    const reusedImageUrl = await this.resolveReusableImage(data.sourceImageSupplementId);
     return this.supplementRepository.create({
       name: data.name,
       description: data.description,
@@ -56,7 +92,7 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
       price: data.price,
       stock: data.stock,
       userId,
-      imageUrl: data.imageUrl ?? null,
+      imageUrl: reusedImageUrl ?? data.imageUrl ?? null,
       category: data.category ?? null,
       manufacturer: data.manufacturer ?? null,
       strength: data.strength ?? null,

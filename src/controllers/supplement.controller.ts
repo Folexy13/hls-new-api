@@ -488,8 +488,9 @@ export class SupplementController extends BaseController {
       const data = CreateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.create(req.user.id, data);
       return ResponseUtil.success(res, { supplement }, 'Supplement created successfully', 201);
-    } catch (error) {
-      return ResponseUtil.error(res, error as string);
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 500;
+      return ResponseUtil.error(res, error, status);
     }
   }
 
@@ -610,6 +611,19 @@ export class SupplementController extends BaseController {
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
       return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  async getImageSuggestions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const query = String(req.query.q || '').trim();
+      if (query.length < 2) {
+        return ResponseUtil.success(res, { suggestions: [] });
+      }
+      const suggestions = await this.supplementService.findImageSuggestions(query);
+      return ResponseUtil.success(res, { suggestions });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve image suggestions', 500, error);
     }
   }
 
