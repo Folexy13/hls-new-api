@@ -94,6 +94,11 @@ export const createSupplementRoutes = (container: Container): Router => {
     authenticatedHandler(supplementController.searchSupplements.bind(supplementController))
   );
 
+  router.get('/image-suggestions',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getImageSuggestions.bind(supplementController))
+  );
+
   /**
    * @swagger
    * /api/v2/supplements/details:

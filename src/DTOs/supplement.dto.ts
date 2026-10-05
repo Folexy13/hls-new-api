@@ -13,6 +13,7 @@ export const CreateSupplementSchema = z.object({
   price: z.number().positive('Price must be positive'),
   stock: z.number().nonnegative('Stock cannot be negative'),
   imageUrl: z.string().optional().nullable(),
+  sourceImageSupplementId: z.number().int().positive().optional().nullable(),
   category: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   strength: z.string().optional().nullable(),
