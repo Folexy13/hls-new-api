@@ -49,6 +49,7 @@ model User {
   referPharmacy Boolean        @default(false)
   referredPharmacyName String? @db.Text
   referredPharmacyPhone String? @db.Text
+  showPricesToBenfeks Boolean    @default(true)
   profileImageUrl String?      @db.Text
   profession String?           @db.Text
   currentPlaceOfWork String?   @db.Text

@@ -15,9 +15,121 @@ type SupplementWithUser = Prisma.SupplementGetPayload<{
   };
 }>;
 
+type BenfekGallerySupplement = Prisma.SupplementGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+        role: true;
+        showPricesToBenfeks: true;
+      };
+    };
+  };
+}>;
+
 @injectable()
 export class SupplementRepository {
   constructor(@inject('PrismaClient') private prisma: PrismaClient) {}
+
+  async findBenfekGallery(
+    benfekId: number,
+    skip: number,
+    take: number,
+    query?: string,
+  ): Promise<{ items: BenfekGallerySupplement[]; total: number }> {
+    const [benfek, referral] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: benfekId },
+        select: {
+          preferredPharmacyName: true,
+          preferredPharmacyPhone: true,
+        },
+      }),
+      this.prisma.quizCode.findFirst({
+        where: { usedBy: benfekId, isUsed: true },
+        orderBy: [{ usedAt: 'desc' }, { updatedAt: 'desc' }],
+        select: { createdBy: true },
+      }),
+    ]);
+
+    const ownerIds = new Set<number>();
+    if (referral?.createdBy) ownerIds.add(referral.createdBy);
+
+    const pharmacyName = benfek?.preferredPharmacyName?.trim();
+    const pharmacyPhone = benfek?.preferredPharmacyPhone?.trim();
+
+    if (pharmacyName || pharmacyPhone) {
+      const pharmacyIdentity: Prisma.UserWhereInput[] = [];
+      if (pharmacyName) {
+        pharmacyIdentity.push(
+          { businessName: { equals: pharmacyName } },
+          { currentPlaceOfWork: { equals: pharmacyName } },
+        );
+      }
+      if (pharmacyPhone) {
+        pharmacyIdentity.push(
+          { phone: pharmacyPhone },
+          { whatsappNumber: { equals: pharmacyPhone } },
+          { contact: { equals: pharmacyPhone } },
+        );
+      }
+
+      const pharmacies = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['pharmacy', 'principal'] },
+          OR: pharmacyIdentity,
+        },
+        select: { id: true },
+      });
+      pharmacies.forEach((pharmacy) => ownerIds.add(pharmacy.id));
+    }
+
+    const visibility: Prisma.SupplementWhereInput[] = Array.from(ownerIds).map((userId) => ({ userId }));
+
+    // Researcher uploads are the default HLS Gallery when no pharmacy is selected.
+    if (!pharmacyName && !pharmacyPhone) {
+      visibility.push({ user: { is: { role: 'researcher' } } });
+    }
+
+    if (visibility.length === 0) return { items: [], total: 0 };
+
+    const where: Prisma.SupplementWhereInput = {
+      OR: visibility,
+      price: { gt: 0 },
+      stock: { gt: 0 },
+      NOT: { status: 'inactive' },
+      ...(query ? { name: { contains: query } } : {}),
+    };
+
+    const include = {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          showPricesToBenfeks: true,
+        },
+      },
+    } satisfies Prisma.SupplementInclude;
+
+    const [items, total] = await Promise.all([
+      this.prisma.supplement.findMany({
+        where,
+        skip,
+        take,
+        include,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.supplement.count({ where }),
+    ]);
+
+    return { items, total };
+  }
   
   async findAll(
     skip?: number,

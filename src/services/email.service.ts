@@ -254,7 +254,7 @@ export class EmailService {
     const frontendUrl = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
     const displayName = this.escapeHtml(benfekName?.trim() || "Benfek");
     const safeCode = this.escapeHtml(code);
-    const quizUrl = `${frontendUrl.replace(/\/$/, "")}/benfek/quiz?code=${encodeURIComponent(code)}`;
+    const quizUrl = `${frontendUrl.replace(/\/$/, "")}/quiz?code=${encodeURIComponent(code)}`;
 
     return {
       subject: "Your HLS Benfek Code",

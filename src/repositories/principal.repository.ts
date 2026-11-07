@@ -24,6 +24,7 @@ export class PrincipalRepository {
     referPharmacy?: boolean;
     referredPharmacyName?: string | null;
     referredPharmacyPhone?: string | null;
+    showPricesToBenfeks?: boolean;
     preferredPaymentMethod?: string;
     bankName?: string;
     accountNumber?: string;
@@ -46,6 +47,7 @@ export class PrincipalRepository {
         referPharmacy: data.referPharmacy ?? false,
         referredPharmacyName: data.referredPharmacyName,
         referredPharmacyPhone: data.referredPharmacyPhone,
+        showPricesToBenfeks: data.showPricesToBenfeks ?? true,
         preferredPaymentMethod: data.preferredPaymentMethod,
         bankName: data.bankName,
         accountNumber: data.accountNumber,
@@ -116,6 +118,7 @@ export class PrincipalRepository {
       referPharmacy: boolean;
       referredPharmacyName: string | null;
       referredPharmacyPhone: string | null;
+      showPricesToBenfeks: boolean;
       preferredPaymentMethod: string;
       bankName: string;
       accountNumber: string;

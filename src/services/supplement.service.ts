@@ -36,6 +36,17 @@ export class SupplementService {  constructor(@inject(SupplementRepository) priv
     return { supplements: result.items, total: result.total };
   }
 
+  async findBenfekGallery(
+    benfekId: number,
+    page: number = 1,
+    limit: number = 20,
+    query?: string,
+  ): Promise<{ supplements: Supplement[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const result = await this.supplementRepository.findBenfekGallery(benfekId, skip, limit, query);
+    return { supplements: result.items, total: result.total };
+  }
+
   async findById(id: number): Promise<Supplement | null> {
     return this.supplementRepository.findById(id);
   }

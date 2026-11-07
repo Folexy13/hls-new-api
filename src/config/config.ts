@@ -19,6 +19,8 @@ export const config = {
     appSecret: process.env.META_APP_SECRET || '',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
+    benfekTemplateName: process.env.WHATSAPP_BENFEK_TEMPLATE_NAME || '',
+    benfekTemplateLanguage: process.env.WHATSAPP_BENFEK_TEMPLATE_LANGUAGE || 'en',
   },
   email: {
     provider: process.env.EMAIL_PROVIDER || '',

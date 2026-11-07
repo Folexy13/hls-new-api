@@ -1,0 +1,2 @@
+ALTER TABLE `User`
+  ADD COLUMN `showPricesToBenfeks` BOOLEAN NOT NULL DEFAULT true;
