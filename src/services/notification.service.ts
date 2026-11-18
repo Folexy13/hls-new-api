@@ -8,6 +8,7 @@ interface NotificationResult {
   stubbed?: boolean;
   payload?: any;
   reason?: string;
+  debugError?: Record<string, unknown>;
 }
 
 @injectable()
@@ -91,8 +92,42 @@ export class NotificationService {
       return { success: true, payload: response.data };
     } catch (error: any) {
       console.error('[NotificationService] WhatsApp send failed', error?.message || error);
-      return { success: false, reason: error?.message || 'WhatsApp request failed' };
+      return {
+        success: false,
+        reason: error?.message || 'WhatsApp request failed',
+        debugError: this.describeWhatsAppError(error),
+      };
     }
+  }
+
+  // Temporary testing diagnostics: never serialize an Axios request or its headers.
+  private describeWhatsAppError(error: any): Record<string, unknown> {
+    const upstream = error?.response?.data?.error || error?.response?.data || {};
+    const redact = (value: unknown): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      for (const secret of [config.whatsapp.apiKey, config.whatsapp.appSecret, config.whatsapp.verifyToken]) {
+        if (secret) value = (value as string).split(secret).join('[REDACTED]');
+      }
+      return value as string;
+    };
+    return {
+      httpStatus: typeof error?.response?.status === 'number' ? error.response.status : undefined,
+      networkCode: redact(error?.code),
+      error: {
+        message: redact(upstream.message) || redact(error?.message) || 'WhatsApp request failed',
+        type: redact(upstream.type),
+        code: typeof upstream.code === 'number' ? upstream.code : undefined,
+        error_subcode: typeof upstream.error_subcode === 'number' ? upstream.error_subcode : undefined,
+        is_transient: typeof upstream.is_transient === 'boolean' ? upstream.is_transient : undefined,
+        error_user_title: redact(upstream.error_user_title),
+        error_user_msg: redact(upstream.error_user_msg),
+        fbtrace_id: redact(upstream.fbtrace_id),
+        error_data: {
+          messaging_product: redact(upstream.error_data?.messaging_product),
+          details: redact(upstream.error_data?.details),
+        },
+      },
+    };
   }
 
   private async sendEmailPayload(payload: any): Promise<NotificationResult> {

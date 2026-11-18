@@ -119,6 +119,9 @@ export class QuizCodeController extends BaseController {
             ? 'WhatsApp is not configured on this server. No message was sent.'
             : 'WhatsApp invitation could not be submitted.',
         providerMessageId: accepted ? whatsapp?.payload?.messages?.[0]?.id || null : null,
+        debug: !accepted
+          ? whatsapp?.debugError || { message: whatsapp?.reason || 'Unexpected notification failure. Check the backend logs.' }
+          : undefined,
       };
       ResponseUtil.success(res, { ...quizCode, emailDelivery, whatsappDelivery }, 'Quiz code created', 201);
     } catch (error: any) {

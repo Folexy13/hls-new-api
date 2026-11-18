@@ -146,3 +146,56 @@ test('completion endpoint defers new users and avoids notifications on repeat su
     assert.equal(notifications, expected);
   }
 });
+
+test('temporary diagnostics need no environment flag and redact credentials', async () => {
+  const original = { ...config.whatsapp };
+  const originalPost = axios.post;
+  const originalFlag = process.env.WHATSAPP_DEBUG_ERRORS;
+  try {
+    Object.assign(config.whatsapp, {
+      provider: 'meta', apiUrl: 'https://example.invalid/messages', apiKey: 'secret-test-token',
+      senderPhone: '2348129431472', benfekTemplateName: 'benfek_quiz_invitation',
+      appSecret: 'secret-test-app', verifyToken: 'secret-test-verify',
+    });
+    axios.post = async () => {
+      throw Object.assign(new Error('Request failed with status code 400'), {
+        code: 'ERR_BAD_REQUEST',
+        config: { headers: { Authorization: 'Bearer secret-test-token' } },
+        response: { status: 400, data: { error: {
+          message: 'Invalid secret-test-token', type: 'OAuthException', code: 190,
+          error_subcode: 463, fbtrace_id: 'test-trace',
+          error_data: { messaging_product: 'whatsapp', details: 'secret-test-app secret-test-verify' },
+        } } },
+      });
+    };
+    for (const legacyFlag of [undefined, 'false']) {
+      if (legacyFlag === undefined) delete process.env.WHATSAPP_DEBUG_ERRORS;
+      else process.env.WHATSAPP_DEBUG_ERRORS = legacyFlag;
+      const service = new NotificationService({});
+      const result = await service.sendBenfekCodeMessage({ phone: invitation.benfekPhone, code: invitation.code });
+      assert.equal(result.success, false);
+      assert.ok(result.debugError);
+      const controller = new QuizCodeController({}, { create: async () => invitation }, {}, service, {}, {
+        sendBenfekCode: async () => sentEmail,
+      });
+      const res = response();
+      await controller.createQuizCode({ user: { id: 1, role: 'principal' }, body: invitation }, res);
+      const debug = res.body.data.whatsappDelivery.debug;
+      assert.ok(debug);
+      assert.equal(debug.httpStatus, 400);
+      assert.equal(debug.error.code, 190);
+      assert.equal(debug.error.error_subcode, 463);
+      assert.equal(debug.error.fbtrace_id, 'test-trace');
+      assert.equal(debug.error.message, 'Invalid [REDACTED]');
+      assert.equal(debug.error.error_data.details, '[REDACTED] [REDACTED]');
+      const serialized = JSON.stringify(res.body);
+      assert.ok(!serialized.includes('secret-test-'));
+      assert.ok(!serialized.includes('Authorization'));
+    }
+  } finally {
+    Object.assign(config.whatsapp, original);
+    axios.post = originalPost;
+    if (originalFlag === undefined) delete process.env.WHATSAPP_DEBUG_ERRORS;
+    else process.env.WHATSAPP_DEBUG_ERRORS = originalFlag;
+  }
+});
