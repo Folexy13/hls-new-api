@@ -32,6 +32,7 @@ const PrincipalExtrasSchema = z.object({
   referPharmacy: z.boolean().optional(),
   referredPharmacyName: optionalTrimmedString,
   referredPharmacyPhone: optionalTrimmedString,
+  showPricesToBenfeks: z.boolean().optional(),
   preferredPaymentMethod: optionalTrimmedString,
   bankName: optionalTrimmedString,
   accountNumber: optionalTrimmedString,

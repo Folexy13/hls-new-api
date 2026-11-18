@@ -197,6 +197,7 @@ export class PrincipalService {
       referPharmacy: boolean;
       referredPharmacyName: string | null;
       referredPharmacyPhone: string | null;
+      showPricesToBenfeks: boolean;
       preferredPaymentMethod: string;
       bankName: string;
       accountNumber: string;
@@ -215,6 +216,7 @@ export class PrincipalService {
       referPharmacy: data.referPharmacy,
       referredPharmacyName: data.referPharmacy === false ? null : data.referredPharmacyName,
       referredPharmacyPhone: data.referPharmacy === false ? null : data.referredPharmacyPhone,
+      showPricesToBenfeks: data.showPricesToBenfeks,
       preferredPaymentMethod: data.preferredPaymentMethod,
       bankName: data.bankName,
       accountNumber: data.accountNumber,

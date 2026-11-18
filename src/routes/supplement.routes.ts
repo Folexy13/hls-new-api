@@ -69,6 +69,11 @@ export const createSupplementRoutes = (container: Container): Router => {
     authenticatedHandler(supplementController.getAllSupplementsForNonBenfek.bind(supplementController))
   );
 
+  router.get('/benfek/gallery',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getBenfekGallery.bind(supplementController))
+  );
+
   /**
    * @swagger
    * /api/v2/supplements/search:
@@ -92,6 +97,11 @@ export const createSupplementRoutes = (container: Container): Router => {
    */
   router.get('/search', 
     authenticatedHandler(supplementController.searchSupplements.bind(supplementController))
+  );
+
+  router.get('/image-suggestions',
+    authGuard.verify(),
+    authenticatedHandler(supplementController.getImageSuggestions.bind(supplementController))
   );
 
   /**

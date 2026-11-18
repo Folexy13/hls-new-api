@@ -13,12 +13,14 @@ import {
   VerifyBenfekCodeSchema,
 } from '../DTOs/researcher.dto';
 import { formatHealthField } from '../utilities/health-field.utility';
+import { SupplementService } from '../services/supplement.service';
 
 @injectable()
 export class ResearcherController {
   constructor(
     @inject('PrismaClient') private prisma: PrismaClient,
-    @inject(NotificationService) private notificationService: NotificationService
+    @inject(NotificationService) private notificationService: NotificationService,
+    @inject(SupplementService) private supplementService: SupplementService
   ) {}
 
   private truncateText(value: string, maxLength: number): string {
@@ -241,10 +243,12 @@ export class ResearcherController {
       if (data.wholesalers?.length && !this.isChecker(req)) {
         return ResponseUtil.error(res, 'Wholesaler details require checker access', 403);
       }
+      const { sourceImageSupplementId, ...supplementData } = data;
+      const reusedImageUrl = await this.supplementService.resolveReusableImage(sourceImageSupplementId);
       const supplement = await this.prisma.supplement.create({
         data: {
-          ...data,
-          imageUrl: data.imageUrl || null,
+          ...supplementData,
+          imageUrl: reusedImageUrl ?? data.imageUrl ?? null,
           category: data.category || null,
           manufacturer: data.manufacturer || null,
           strength: data.strength || null,
@@ -258,9 +262,10 @@ export class ResearcherController {
       });
 
       return ResponseUtil.success(res, { supplement }, 'Supplement added to gallery', 201);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) return ResponseUtil.error(res, 'Validation failed', 400, error);
-      return ResponseUtil.error(res, 'Failed to create supplement', 500, error);
+      const status = error?.statusCode || error?.status || 500;
+      return ResponseUtil.error(res, error, status);
     }
   };
 

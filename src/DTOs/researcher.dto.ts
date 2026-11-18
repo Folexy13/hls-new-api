@@ -26,6 +26,7 @@ export const ResearcherSupplementSchema = z.object({
   price: z.number().nonnegative('Price cannot be negative'),
   stock: z.number().int().nonnegative('Stock cannot be negative').optional().default(0),
   imageUrl: z.string().optional().nullable(),
+  sourceImageSupplementId: z.number().int().positive().optional().nullable(),
   category: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   strength: z.string().optional().nullable(),

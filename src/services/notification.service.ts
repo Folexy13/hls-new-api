@@ -1,5 +1,6 @@
 import axios from 'axios';
-import { injectable } from 'inversify';
+import { PrismaClient } from '@prisma/client';
+import { inject, injectable } from 'inversify';
 import { config } from '../config/config';
 
 interface NotificationResult {
@@ -17,7 +18,7 @@ export class NotificationService {
   private readonly whatsappProvider: string;
   private readonly whatsappAccountSid?: string;
 
-  constructor() {
+  constructor(@inject('PrismaClient') private prisma: PrismaClient) {
     this.frontendBaseUrl = config.frontendBaseUrl || 'http://localhost:7000';
     this.whatsappProvider = (config.whatsapp.provider || 'twilio').toLowerCase();
     this.whatsappAccountSid = config.whatsapp.accountSid;
@@ -79,8 +80,10 @@ export class NotificationService {
       console.log('[NotificationService] WhatsApp sent', {
         provider: this.whatsappProvider,
         to: payload.to,
-        message: payload.text?.body,
+        messageType: payload.type,
+        template: payload.template?.name,
       });
+      await this.recordAcceptedWhatsAppMessage(response.data, payload.to);
       return { success: true, payload: response.data };
     } catch (error: any) {
       console.error('[NotificationService] WhatsApp send failed', error?.message || error);
@@ -112,11 +115,38 @@ export class NotificationService {
   }
 
   private formatPhoneForWhatsApp(phone: string) {
-    return phone.replace(/[^0-9+]/g, '');
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('234')) return digits;
+    if (digits.startsWith('0')) return `234${digits.slice(1)}`;
+    return digits;
+  }
+
+  private async recordAcceptedWhatsAppMessage(response: any, recipient?: string): Promise<void> {
+    const providerMessageId = response?.messages?.[0]?.id;
+    if (!providerMessageId) return;
+
+    try {
+      await this.prisma.whatsAppDelivery.upsert({
+        where: { providerMessageId: String(providerMessageId) },
+        create: {
+          providerMessageId: String(providerMessageId),
+          recipient: recipient ? String(recipient) : null,
+          status: 'accepted',
+          eventTimestamp: new Date(),
+        },
+        update: {
+          recipient: recipient ? String(recipient) : undefined,
+          status: 'accepted',
+        },
+      });
+    } catch (error) {
+      // Sending succeeded; delivery webhooks can still create this record later.
+      console.error('[NotificationService] Failed to record accepted WhatsApp message', error);
+    }
   }
 
   buildQuizLink(code: string) {
-    return `${this.frontendBaseUrl.replace(/\/$/, '')}/benfek/quiz?code=${encodeURIComponent(code)}`;
+    return `${this.frontendBaseUrl.replace(/\/$/, '')}/quiz?code=${encodeURIComponent(code)}`;
   }
 
   private buildWhatsAppAddress(phone: string) {
@@ -201,6 +231,32 @@ export class NotificationService {
     return this.sendWhatsAppPayload(payload);
   }
 
+  async sendWhatsAppTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    components: any[],
+  ): Promise<NotificationResult> {
+    if (!this.isMetaProvider()) {
+      return { success: false, reason: 'WhatsApp templates require the Meta Cloud API provider' };
+    }
+
+    if (!templateName) {
+      return { success: false, reason: 'WhatsApp template name is not configured' };
+    }
+
+    return this.sendWhatsAppPayload({
+      messaging_product: 'whatsapp',
+      to: this.formatPhoneForWhatsApp(to),
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        components,
+      },
+    });
+  }
+
   async sendEmail(
     to: string,
     subject: string,
@@ -226,6 +282,46 @@ export class NotificationService {
   }): Promise<NotificationResult> {
     const link = this.buildQuizLink(options.code);
     const text = `Hello ${options.benfekName ?? 'Benfek'}, your HLS benfek code is ${options.code}. Click here to take your quiz now: ${link}`;
+
+    if (options.phone && this.isMetaProvider()) {
+      const whatsappResult = await this.sendWhatsAppTemplate(
+        options.phone,
+        config.whatsapp.benfekTemplateName,
+        config.whatsapp.benfekTemplateLanguage,
+        [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: options.benfekName?.trim() || 'Benfek' },
+            ],
+          },
+          {
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: [
+              { type: 'text', text: options.code },
+            ],
+          },
+        ],
+      );
+
+      if (!options.email) return whatsappResult;
+
+      const emailResult = await this.sendEmail(
+        options.email,
+        'Your HLS Benfek Code',
+        `<p>${text}</p>`,
+        text,
+      );
+      return {
+        success: whatsappResult.success && emailResult.success,
+        payload: [
+          { channel: 'whatsapp', ...whatsappResult },
+          { channel: 'email', ...emailResult },
+        ],
+      };
+    }
 
     return this.sendWhatsAppAndEmail({
       phone: options.phone,

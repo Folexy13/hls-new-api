@@ -135,6 +135,14 @@ export class SupplementController extends BaseController {
     return true;
   }
 
+  private ensureBenfekRole(req: AuthenticatedRequest, res: Response): boolean {
+    if (req.user.role !== 'benfek') {
+      ResponseUtil.error(res, 'Only Benfeks can access this resource', 403);
+      return false;
+    }
+    return true;
+  }
+
   private ensureNotBenfek(req: AuthenticatedRequest, res: Response): boolean {
     if (req.user.role === 'benfek') {
       ResponseUtil.error(res, 'Benfeks are not allowed to access this resource', 403);
@@ -335,6 +343,40 @@ export class SupplementController extends BaseController {
     }
   }
 
+  async getBenfekGallery(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!this.ensureBenfekRole(req, res)) return;
+
+      const { page = 1, limit = 20, q } = req.query;
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
+      const query = typeof q === 'string' ? q.trim() : '';
+      const { supplements, total } = await this.supplementService.findBenfekGallery(
+        req.user.id,
+        pageNum,
+        limitNum,
+        query || undefined,
+      );
+
+      const visibleSupplements = supplements.map((supplement: any) => {
+        const priceHidden = supplement.user?.role === 'principal'
+          && supplement.user?.showPricesToBenfeks === false;
+        return {
+          ...supplement,
+          price: priceHidden ? null : supplement.price,
+          priceHidden,
+        };
+      });
+
+      return ResponseUtil.success(res, {
+        supplements: visibleSupplements,
+        meta: PaginationUtil.getPaginationMetadata(total, pageNum, limitNum),
+      });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve Benfek gallery', 500, error);
+    }
+  }
+
   async getWholesalerGallery(req: AuthenticatedRequest, res: Response) {
     try {
       if (!this.ensureWholesalerRole(req, res)) return;
@@ -488,8 +530,9 @@ export class SupplementController extends BaseController {
       const data = CreateSupplementSchema.parse(req.body);
       const supplement = await this.supplementService.create(req.user.id, data);
       return ResponseUtil.success(res, { supplement }, 'Supplement created successfully', 201);
-    } catch (error) {
-      return ResponseUtil.error(res, error as string);
+    } catch (error: any) {
+      const status = error?.statusCode || error?.status || 500;
+      return ResponseUtil.error(res, error, status);
     }
   }
 
@@ -610,6 +653,19 @@ export class SupplementController extends BaseController {
       return ResponseUtil.success(res, { supplements });
     } catch (error) {
       return ResponseUtil.error(res, error as string);
+    }
+  }
+
+  async getImageSuggestions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const query = String(req.query.q || '').trim();
+      if (query.length < 2) {
+        return ResponseUtil.success(res, { suggestions: [] });
+      }
+      const suggestions = await this.supplementService.findImageSuggestions(query);
+      return ResponseUtil.success(res, { suggestions });
+    } catch (error) {
+      return ResponseUtil.error(res, 'Failed to retrieve image suggestions', 500, error);
     }
   }
 
