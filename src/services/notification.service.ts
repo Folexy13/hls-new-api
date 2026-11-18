@@ -33,7 +33,7 @@ export class NotificationService {
   private logStub(action: string, payload: any): Promise<NotificationResult> {
     console.log(`\n[NotificationService][STUB] ${action}`);
     console.log(JSON.stringify(payload, null, 2));
-    return Promise.resolve({ success: true, stubbed: true, payload });
+    return Promise.resolve({ success: false, stubbed: true, reason: 'Notification provider is not configured', payload });
   }
 
   private isTwilioProvider(): boolean {
@@ -76,7 +76,11 @@ export class NotificationService {
           Authorization: `Bearer ${config.whatsapp.apiKey}`,
           'Content-Type': 'application/json',
         },
+        timeout: 15000,
       });
+      if (this.isMetaProvider() && !response.data?.messages?.[0]?.id) {
+        return { success: false, reason: 'Meta did not return a message identifier' };
+      }
       console.log('[NotificationService] WhatsApp sent', {
         provider: this.whatsappProvider,
         to: payload.to,
@@ -321,6 +325,10 @@ export class NotificationService {
           { channel: 'email', ...emailResult },
         ],
       };
+    }
+
+    if (options.phone && !options.email) {
+      return this.sendWhatsAppText(options.phone, text);
     }
 
     return this.sendWhatsAppAndEmail({
