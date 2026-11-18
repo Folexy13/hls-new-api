@@ -96,12 +96,31 @@ export class QuizCodeController extends BaseController {
         hasCurrentCondition: data.hasCurrentCondition ?? Boolean(data.currentConditions?.length),
       });
 
-      const emailDelivery = await this.emailDeliveryService.sendBenfekCode(quizCode);
-
-      const message = emailDelivery.sent
-        ? 'Quiz code created and emailed successfully'
-        : 'Quiz code created, but the email is pending delivery';
-      ResponseUtil.success(res, { ...quizCode, emailDelivery }, message, 201);
+      // A provider failure must not turn a saved referral into a failed request.
+      const [emailResult, whatsappResult] = await Promise.allSettled([
+        Promise.resolve().then(() => this.emailDeliveryService.sendBenfekCode(quizCode)),
+        Promise.resolve().then(() => this.notificationService.sendBenfekCodeMessage({
+          phone: quizCode.benfekPhone,
+          benfekName: quizCode.benfekName,
+          code: quizCode.code,
+        })),
+      ]);
+      const emailDelivery = emailResult.status === 'fulfilled'
+        ? emailResult.value
+        : { status: 'failed', sent: false, message: 'Email could not be submitted. Please retry the email invitation.' };
+      const whatsapp = whatsappResult.status === 'fulfilled' ? whatsappResult.value : null;
+      const accepted = whatsapp?.success === true && !whatsapp.stubbed;
+      const whatsappDelivery = {
+        status: accepted ? 'accepted' : whatsapp?.stubbed ? 'not_configured' : 'failed',
+        accepted,
+        message: accepted
+          ? 'WhatsApp invitation accepted by the provider; delivery is not yet confirmed.'
+          : whatsapp?.stubbed
+            ? 'WhatsApp is not configured on this server. No message was sent.'
+            : 'WhatsApp invitation could not be submitted.',
+        providerMessageId: accepted ? whatsapp?.payload?.messages?.[0]?.id || null : null,
+      };
+      ResponseUtil.success(res, { ...quizCode, emailDelivery, whatsappDelivery }, 'Quiz code created', 201);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         ResponseUtil.error(res, 'Validation failed', 400, error);
@@ -407,14 +426,14 @@ export class QuizCodeController extends BaseController {
       });
 
       // Send assessment completed notification if benfek user is associated
-      if (quizCode.usedBy) {
+      if (quizCode.usedBy && quizCode.preferenceBudget == null) {
         const benfek = await this.prisma.user.findUnique({ where: { id: quizCode.usedBy } });
         if (benfek) {
           await this.notificationService.sendAssessmentCompletedMessage({
             phone: benfek.phone || undefined,
             email: benfek.email,
             benfekName: benfek.firstName || data.basics.nickname || 'Benfek'
-          });
+          }).catch(error => console.error('[QuizCodeController] Assessment notification failed', error));
         }
       }
 

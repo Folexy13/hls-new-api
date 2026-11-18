@@ -314,7 +314,7 @@ export class AuthService {
     let operationalQuizCode = null;
 
     if (data.quizCode) {
-      await this.prisma.quizCode.updateMany({
+      const linked = await this.prisma.quizCode.updateMany({
         where: {
           code: data.quizCode,
           OR: [{ usedBy: null }, { usedBy: user.id }],
@@ -331,6 +331,14 @@ export class AuthService {
           code: true,
         },
       });
+      // The standalone quiz is submitted before the Benfek account exists.
+      if (linked.count === 1 && linkedQuizCode?.usedBy == null && linkedQuizCode?.preferenceBudget != null) {
+        await this.notificationService.sendAssessmentCompletedMessage({
+          phone: user.phone || undefined,
+          email: user.email,
+          benfekName: user.firstName || linkedQuizCode.benfekName,
+        }).catch(error => console.error('[AuthService] Assessment notification failed', error));
+      }
     } else {
       operationalQuizCode = await ensureOperationalQuizCodeForBenfek(this.prisma, {
         id: user.id,
