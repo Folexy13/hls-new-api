@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { PaystackService } from '../services/paystack.service';
 import { CartService } from '../services/cart.service';
@@ -9,6 +9,7 @@ import { OrderRepository } from '../repositories/order.repository';
 import { SupplementRepository } from '../repositories/supplement.repository';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { NotificationService } from '../services/notification.service';
+import { NotificationWorkflowService } from '../services/notification-workflow.service';
 import { BaseController } from './base.controller';
 import { Container } from 'inversify';
 import {
@@ -33,7 +34,8 @@ export class PaystackController extends BaseController {
     @inject(OrderRepository) private orderRepository: OrderRepository,
     @inject(SupplementRepository) private supplementRepository: SupplementRepository,
     @inject(NotificationService) private notificationService: NotificationService,
-    @inject(EmailService) private emailService: EmailService
+    @inject(EmailService) private emailService: EmailService,
+    @inject(NotificationWorkflowService) private notificationWorkflows: NotificationWorkflowService,
   ) {
     super(container);
   }
@@ -79,14 +81,14 @@ export class PaystackController extends BaseController {
     packId: string;
     packName: string;
     quizCode: string;
-  }): Promise<{
+  }, db: Prisma.TransactionClient = this.prisma): Promise<{
     principalId: number;
     benfekName: string | null;
     principalShare: number;
     amount: number;
     supplement: string;
   } | null> {
-    const quizCodeRecord = await this.prisma.quizCode.findUnique({
+    const quizCodeRecord = await db.quizCode.findUnique({
       where: { code: params.quizCode },
       select: { createdBy: true, benfekName: true },
     });
@@ -95,7 +97,7 @@ export class PaystackController extends BaseController {
       return null;
     }
 
-    const existingCredit = await this.prisma.principalCredit.findFirst({
+    const existingCredit = await db.principalCredit.findFirst({
       where: {
         paymentId: params.paymentId,
         quizCode: params.quizCode,
@@ -108,7 +110,7 @@ export class PaystackController extends BaseController {
       return null;
     }
 
-    const wallet = await this.prisma.wallet.upsert({
+    const wallet = await db.wallet.upsert({
       where: { userId: quizCodeRecord.createdBy },
       update: {},
       create: {
@@ -118,7 +120,7 @@ export class PaystackController extends BaseController {
       select: { id: true, balance: true },
     });
 
-    const packRows = await this.prisma.$queryRawUnsafe<any[]>(
+    const packRows = await db.$queryRawUnsafe<any[]>(
       `SELECT rpi.id,
               rpi.quantity,
               rpi.selectedWholesalerName,
@@ -176,12 +178,12 @@ export class PaystackController extends BaseController {
       { amount: 0, costPrice: 0, tax: 0, serviceCharge: 0, hlsCommission: 0, principalShare: 0 }
     );
 
-    await this.prisma.wallet.update({
+    await db.wallet.update({
       where: { id: wallet.id },
       data: { balance: { increment: aggregate.principalShare } },
     });
 
-    await this.prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `INSERT INTO PrincipalCredit
       (principalId, walletId, quizCode, packDbId, packId, packName, benfekName, orderId, paymentId, paymentReference, supplement, amount, costPrice, markupFactor, taxAmount, serviceChargeAmount, hlsCommissionAmount, principalShare, status, details, createdAt, updatedAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unresolved', ?, NOW(), NOW())`,
@@ -221,212 +223,168 @@ export class PaystackController extends BaseController {
     };
   }
 
-  private async processPaystackCharge(paystackData: Record<string, any>, reference: string, verifiedByUserId?: number) {
-    const existingPayment = await this.paystackRepository.getPaymentByTransaction(reference);
-    const metadata = (paystackData.metadata || {}) as Record<string, any>;
-    const orderId = Number(metadata.orderId || existingPayment?.orderId || 0);
-    const paymentUserId = Number(existingPayment?.userId || metadata.userId || 0);
-
-    if (!orderId || !paymentUserId) {
+  private async settlePaystackCharge(paystackData: Record<string, any>, reference: string, verifiedByUserId?: number) {
+    const initial = await this.paystackRepository.getPaymentByTransaction(reference);
+    if (!initial?.orderId || !initial.userId) {
       throw new Error('Payment details are incomplete. Please start checkout again.');
     }
-
+    const paymentUserId = initial.userId;
     if (verifiedByUserId && paymentUserId !== verifiedByUserId) {
       const error = new Error('This payment reference does not belong to your account.');
       (error as any).statusCode = 403;
       throw error;
     }
-
-    const order = await this.orderRepository.findById(orderId);
-    if (!order || order.userId !== paymentUserId) {
-      const error = new Error('Payment order was not found for this account.');
-      (error as any).statusCode = 404;
-      throw error;
-    }
-
-    if (existingPayment && existingPayment.status !== 'pending') {
-      return {
-        orderId,
-        orderNumber: metadata.orderNumber,
-        amount: existingPayment.amount,
-        status: existingPayment.status,
-        channel: existingPayment.paystackChannel,
-        checkoutType: metadata.checkoutType || 'cart',
-        packId: metadata.packId || null,
-        packName: metadata.packName || null,
-        paystackReference: reference,
-        paystackTransactionId: existingPayment.paystackTransactionId,
-        alreadyProcessed: true,
+    return this.prisma.$transaction(async tx => {
+      // Both verification and the signed webhook serialize on the same order.
+      await tx.$queryRaw`SELECT id FROM \`Order\` WHERE id = ${initial.orderId} FOR UPDATE`;
+      const existingPayment = await tx.payment.findUnique({ where: { orderId: initial.orderId } });
+      const order = await tx.order.findUnique({ where: { id: initial.orderId }, include: { items: true } });
+      if (!order || order.userId !== paymentUserId || !existingPayment || existingPayment.userId !== paymentUserId
+        || existingPayment.paystackReference !== reference) {
+        throw Object.assign(new Error('Payment order or reference no longer matches this account.'), { statusCode: 409 });
+      }
+      let storedMetadata: Record<string, any> = {};
+      try { storedMetadata = JSON.parse(existingPayment.metadata || '{}') || {}; } catch { /* Legacy metadata may be empty. */ }
+      const incomingMetadata = paystackData.metadata && typeof paystackData.metadata === 'object' ? paystackData.metadata : {};
+      const metadata = { ...incomingMetadata, ...storedMetadata, orderNumber: order.orderNumber };
+      if ((paystackData.reference && paystackData.reference !== reference)
+        || (incomingMetadata.orderId && Number(incomingMetadata.orderId) !== order.id)
+        || (incomingMetadata.userId && Number(incomingMetadata.userId) !== order.userId)) {
+        throw Object.assign(new Error('Verified payment details do not match the order.'), { statusCode: 409 });
+      }
+      const result = {
+        orderId: order.id, orderNumber: order.orderNumber, amount: existingPayment.amount,
+        status: existingPayment.status, channel: existingPayment.paystackChannel,
+        checkoutType: metadata.checkoutType || 'cart', packId: metadata.packId || null, packName: metadata.packName || null,
+        paystackReference: reference, paystackTransactionId: existingPayment.paystackTransactionId,
+        alreadyProcessed: true, gateway_response: paystackData.gateway_response,
       };
-    }
-
-    if (paystackData.status === 'success') {
-      await this.orderRepository.updateStatus(orderId, 'paid');
-
-      const payment = await this.paystackRepository.upsertPaymentByOrderId({
-        userId: paymentUserId,
-        orderId,
-        amount: Number(paystackData.amount || 0) / 100,
-        method: 'paystack',
-        status: 'success',
-        paystackReference: reference,
+      let principalCredit: Awaited<ReturnType<PaystackController['recordPrincipalCreditForPack']>> = null;
+      const context = { result, metadata, paymentUserId, principalCredit };
+      if (!['pending', 'failed'].includes(existingPayment.status)) return context;
+      // A pending/ongoing verification is not evidence of failure.
+      if (!['success', 'failed', 'abandoned'].includes(paystackData.status)) {
+        result.status = paystackData.status || 'pending';
+        return context;
+      }
+      if (paystackData.status !== 'success' && existingPayment.status === 'failed') return context;
+      const success = paystackData.status === 'success';
+      const amount = Number(paystackData.amount);
+      if (success && (!Number.isSafeInteger(amount) || amount !== Math.round(order.total * 100)
+        || paystackData.currency !== existingPayment.currency)) {
+        throw Object.assign(new Error('Verified payment amount or currency does not match the order.'), { statusCode: 409 });
+      }
+      const payment = await tx.payment.update({ where: { id: existingPayment.id }, data: {
+        status: success ? 'success' : 'failed',
+        amount: success ? amount / 100 : existingPayment.amount,
         paystackTransactionId: paystackData.id ? String(paystackData.id) : undefined,
         paystackChannel: paystackData.channel,
-        currency: paystackData.currency || 'NGN',
-        paidAt: paystackData.paid_at ? new Date(paystackData.paid_at) : new Date(),
-        metadata: JSON.stringify({
-          ...metadata,
-          verify: paystackData,
-          paystackReference: reference,
-          paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
-        }),
-      });
-
-      if (metadata.checkoutType !== 'pack') {
-        if (order.items) {
+        paidAt: success ? (paystackData.paid_at ? new Date(paystackData.paid_at) : new Date()) : undefined,
+        metadata: JSON.stringify({ ...metadata, verify: paystackData, paystackReference: reference,
+          paystackTransactionId: paystackData.id ? String(paystackData.id) : null }),
+      } });
+      await tx.order.update({ where: { id: order.id }, data: { status: success ? 'paid' : 'failed' } });
+      if (success) {
+        if (metadata.checkoutType !== 'pack') {
           for (const item of order.items) {
-            await this.supplementRepository.decrementStock(item.supplementId, item.quantity);
+            await tx.supplement.update({ where: { id: item.supplementId }, data: { stock: { decrement: item.quantity } } });
           }
+          const cart = await tx.cart.findFirst({ where: { userId: paymentUserId } });
+          if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
         }
-
-        try {
-          await this.cartService.clearCart(paymentUserId);
-        } catch (cartError: any) {
-          if (cartError?.message !== 'Cart not found') {
-            throw cartError;
-          }
+        if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
+          principalCredit = await this.recordPrincipalCreditForPack({
+            orderId: order.id, paymentId: payment.id, paymentReference: reference,
+            packDbId: Number(metadata.packDbId) || undefined, packId: String(metadata.packId),
+            packName: String(metadata.packName), quizCode: String(metadata.quizCode),
+          }, tx);
         }
       }
+      const kind = success ? 'payment_successful' : 'payment_failed';
+      await this.notificationWorkflows.enqueue(`${kind}:${payment.id}:${reference}`, kind,
+        { paymentId: payment.id, reference, orderNumber: order.orderNumber, amount: payment.amount }, paymentUserId, undefined, tx);
+      Object.assign(result, { status: payment.status, amount: payment.amount, channel: payment.paystackChannel,
+        paystackTransactionId: payment.paystackTransactionId, alreadyProcessed: false });
+      return { ...context, principalCredit };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
+  }
 
-      let principalCredit: Awaited<ReturnType<typeof this.recordPrincipalCreditForPack>> = null;
-      if (metadata.checkoutType === 'pack' && metadata.packId && metadata.packName && metadata.quizCode) {
-        principalCredit = await this.recordPrincipalCreditForPack({
-          orderId,
-          paymentId: payment.id,
-          paymentReference: reference,
-          packDbId: Number(metadata.packDbId) || undefined,
-          packId: String(metadata.packId),
-          packName: String(metadata.packName),
-          quizCode: String(metadata.quizCode),
-        });
-      }
-
-      const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
-      if (user) {
-        await this.notificationService.sendPaymentSuccessfulMessage({
-          phone: user.phone || undefined,
-          email: user.email,
-          orderNumber: metadata.orderNumber || String(orderId),
-          amount: Number(paystackData.amount || 0) / 100,
-        });
-
-        const isPack = metadata.checkoutType === 'pack';
-        let principal: { firstName: string | null; lastName: string | null; email: string; phone: string | null } | null = null;
-        if (isPack && principalCredit?.principalId) {
-          principal = await this.prisma.user.findUnique({
-            where: { id: principalCredit.principalId },
-            select: { firstName: true, lastName: true, email: true, phone: true },
+  private async processPaystackCharge(paystackData: Record<string, any>, reference: string, verifiedByUserId?: number) {
+    const { result, metadata, paymentUserId, principalCredit } = await this.settlePaystackCharge(paystackData, reference, verifiedByUserId);
+    if (result.alreadyProcessed) return result;
+    const orderId = result.orderId;
+    // External delivery happens after commit; notification failures cannot undo settlement.
+    try {
+      if (result.status === 'success') {
+        const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
+        if (user) {
+          await this.notificationService.sendPaymentSuccessfulMessage({
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+            amount: Number(paystackData.amount || 0) / 100,
           });
-        }
 
-        if (isPack && principal?.email) {
-          await this.emailService.notifyRecipient(
-            principal.email,
-            'Your Benfek Paid for a Nutrient Pack',
-            'Benfek pack payment details',
+          const isPack = metadata.checkoutType === 'pack';
+          let principal: { firstName: string | null; lastName: string | null; email: string; phone: string | null } | null = null;
+          if (isPack && principalCredit?.principalId) {
+            principal = await this.prisma.user.findUnique({
+              where: { id: principalCredit.principalId },
+              select: { firstName: true, lastName: true, email: true, phone: true },
+            });
+          }
+
+          if (isPack && principal?.email) {
+            await this.emailService.notifyRecipient(
+              principal.email,
+              'Your Benfek Paid for a Nutrient Pack',
+              'Benfek pack payment details',
+              [
+                { label: 'Benfek', value: principalCredit?.benfekName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+                { label: 'Benfek Email', value: user.email },
+                { label: 'Pack Name', value: metadata.packName || 'N/A' },
+                { label: 'Pack ID', value: metadata.packId || 'N/A' },
+                { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+                { label: 'Order ID', value: String(orderId) },
+                { label: 'Payment Reference', value: reference },
+                { label: 'Amount Paid', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
+                { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
+                { label: 'Supplements', value: principalCredit?.supplement || 'N/A' },
+              ]
+            ).catch(console.error);
+          }
+
+          await this.emailService.notifyAdmin(
+            isPack ? 'New Pack Purchase' : 'New Pharmacy Purchase',
+            isPack ? 'Purchases with pack details in my nutrient pack section' : 'Purchase of item from pharmacy',
             [
-              { label: 'Benfek', value: principalCredit?.benfekName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
-              { label: 'Benfek Email', value: user.email },
-              { label: 'Pack Name', value: metadata.packName || 'N/A' },
-              { label: 'Pack ID', value: metadata.packId || 'N/A' },
-              { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+              { label: 'User', value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
+              { label: 'Email', value: user.email },
               { label: 'Order ID', value: String(orderId) },
-              { label: 'Payment Reference', value: reference },
-              { label: 'Amount Paid', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
+              { label: 'Amount', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
+              { label: 'Type', value: isPack ? 'Nutrient Pack' : 'Pharmacy Item' },
+              { label: 'Pack ID', value: metadata.packId || 'N/A' },
+              { label: 'Pack Name', value: metadata.packName || 'N/A' },
+              { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
+              { label: 'Principal', value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() || principal.email : 'N/A' },
+              { label: 'Principal Email', value: principal?.email || 'N/A' },
               { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
-              { label: 'Supplements', value: principalCredit?.supplement || 'N/A' },
             ]
           ).catch(console.error);
         }
 
-        await this.emailService.notifyAdmin(
-          isPack ? 'New Pack Purchase' : 'New Pharmacy Purchase',
-          isPack ? 'Purchases with pack details in my nutrient pack section' : 'Purchase of item from pharmacy',
-          [
-            { label: 'User', value: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email },
-            { label: 'Email', value: user.email },
-            { label: 'Order ID', value: String(orderId) },
-            { label: 'Amount', value: `NGN ${Number(paystackData.amount || 0) / 100}` },
-            { label: 'Type', value: isPack ? 'Nutrient Pack' : 'Pharmacy Item' },
-            { label: 'Pack ID', value: metadata.packId || 'N/A' },
-            { label: 'Pack Name', value: metadata.packName || 'N/A' },
-            { label: 'Quiz Code', value: metadata.quizCode || 'N/A' },
-            { label: 'Principal', value: principal ? `${principal.firstName || ''} ${principal.lastName || ''}`.trim() || principal.email : 'N/A' },
-            { label: 'Principal Email', value: principal?.email || 'N/A' },
-            { label: 'Principal Share', value: principalCredit ? `NGN ${principalCredit.principalShare}` : 'N/A' },
-          ]
-        ).catch(console.error);
+      } else {
+        const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
+        if (user) {
+          await this.notificationService.sendPaymentFailedMessage({
+            email: user.email,
+            orderNumber: metadata.orderNumber || String(orderId),
+          });
+        }
       }
-
-      return {
-        orderId,
-        orderNumber: metadata.orderNumber,
-        amount: Number(paystackData.amount || 0) / 100,
-        status: 'success',
-        channel: paystackData.channel,
-        checkoutType: metadata.checkoutType || 'cart',
-        packId: metadata.packId || null,
-        packName: metadata.packName || null,
-        paystackReference: reference,
-        paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
-        alreadyProcessed: false,
-      };
+    } catch (error) {
+      console.error('[Payment] Post-settlement notification failed', error instanceof Error ? error.message : 'Unknown error');
     }
-
-    await this.orderRepository.updateStatus(orderId, 'failed');
-    let storedMetadata: Record<string, any> = {};
-    if (existingPayment?.metadata) {
-      try {
-        storedMetadata = JSON.parse(existingPayment.metadata);
-      } catch {
-        storedMetadata = {};
-      }
-    }
-
-    await this.paystackRepository.upsertPaymentByOrderId({
-      userId: paymentUserId,
-      orderId,
-      amount: paystackData.amount ? Number(paystackData.amount) / 100 : 0,
-      method: 'paystack',
-      status: 'failed',
-      paystackReference: reference,
-      paystackTransactionId: paystackData.id ? String(paystackData.id) : undefined,
-      paystackChannel: paystackData.channel,
-      currency: paystackData.currency || 'NGN',
-      metadata: JSON.stringify({
-        ...storedMetadata,
-        ...metadata,
-        verify: paystackData,
-        paystackReference: reference,
-        paystackTransactionId: paystackData.id ? String(paystackData.id) : null,
-      }),
-    });
-
-    const user = await this.prisma.user.findUnique({ where: { id: paymentUserId } });
-    if (user) {
-      await this.notificationService.sendPaymentFailedMessage({
-        phone: user.phone || undefined,
-        email: user.email,
-        orderNumber: metadata.orderNumber || String(orderId),
-      });
-    }
-
-    return {
-      orderId,
-      status: paystackData.status || 'failed',
-      gateway_response: paystackData.gateway_response,
-      checkoutType: metadata.checkoutType || 'cart',
-    };
+    return result;
   }
 
   /**

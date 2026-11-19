@@ -11,6 +11,7 @@ import { CreateQuizCodeSchema, ValidateQuizCodeSchema, UseQuizCodeSchema, Comple
 import { formatHealthField } from '../utilities/health-field.utility';
 import { AppError } from '../utilities/errors';
 import { EmailDeliveryService } from '../services/email-delivery.service';
+import { NotificationWorkflowService } from '../services/notification-workflow.service';
 
 @injectable()
 export class QuizCodeController extends BaseController {
@@ -20,7 +21,8 @@ export class QuizCodeController extends BaseController {
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
     @inject(EmailService) private emailService: EmailService,
-    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService
+    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService,
+    @inject(NotificationWorkflowService) private workflows: NotificationWorkflowService
   ) {
     super(container);
   }
@@ -80,6 +82,7 @@ export class QuizCodeController extends BaseController {
       const data = CreateQuizCodeSchema.parse(req.body);
       
       const quizCode = await this.quizCodeRepository.create({
+        notificationRemindersEnabled: data.notificationRemindersEnabled,
         createdBy: user.id,
         benfekName: data.benfekName,
         benfekEmail: data.benfekEmail,
@@ -119,9 +122,6 @@ export class QuizCodeController extends BaseController {
             ? 'WhatsApp is not configured on this server. No message was sent.'
             : 'WhatsApp invitation could not be submitted.',
         providerMessageId: accepted ? whatsapp?.payload?.messages?.[0]?.id || null : null,
-        debug: !accepted
-          ? whatsapp?.debugError || { message: whatsapp?.reason || 'Unexpected notification failure. Check the backend logs.' }
-          : undefined,
       };
       ResponseUtil.success(res, { ...quizCode, emailDelivery, whatsappDelivery }, 'Quiz code created', 201);
     } catch (error: any) {
@@ -416,24 +416,27 @@ export class QuizCodeController extends BaseController {
         return;
       }
 
-      const updated = await this.quizCodeRepository.completeBenfekQuiz(data.code.toUpperCase(), {
-        basicNickname: data.basics.nickname,
-        basicWeight: data.basics.weight || quizCode.basicWeight || undefined,
-        basicHeight: data.basics.height || quizCode.basicHeight || undefined,
-        lifestyleHabits: data.lifestyle.habits,
-        lifestyleFun: data.lifestyle.funActivities,
-        lifestyleDesires: data.lifestyle.desires,
-        lifestylePriority: data.lifestyle.priority,
-        preferenceDrugForm: data.preferences.drugForm,
-        preferenceBudget: data.preferences.budget,
+      const updated = await this.prisma.$transaction(async tx => {
+        const completed = await tx.quizCode.update({ where: { code: data.code.toUpperCase() }, data: {
+          basicNickname: data.basics.nickname,
+          basicWeight: data.basics.weight || quizCode.basicWeight || undefined,
+          basicHeight: data.basics.height || quizCode.basicHeight || undefined,
+          lifestyleHabits: data.lifestyle.habits,
+          lifestyleFun: data.lifestyle.funActivities,
+          lifestyleDesires: data.lifestyle.desires,
+          lifestylePriority: data.lifestyle.priority,
+          preferenceDrugForm: data.preferences.drugForm,
+          preferenceBudget: data.preferences.budget,
+        } });
+        if (quizCode.preferenceBudget == null) await this.workflows.enqueueAssessmentCompleted(completed.id, tx);
+        return completed;
       });
 
-      // Send assessment completed notification if benfek user is associated
+      // Email is independent; WhatsApp is dispatched by the durable job above.
       if (quizCode.usedBy && quizCode.preferenceBudget == null) {
         const benfek = await this.prisma.user.findUnique({ where: { id: quizCode.usedBy } });
         if (benfek) {
           await this.notificationService.sendAssessmentCompletedMessage({
-            phone: benfek.phone || undefined,
             email: benfek.email,
             benfekName: benfek.firstName || data.basics.nickname || 'Benfek'
           }).catch(error => console.error('[QuizCodeController] Assessment notification failed', error));

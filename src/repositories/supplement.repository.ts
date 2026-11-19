@@ -117,13 +117,35 @@ export class SupplementRepository {
       },
     } satisfies Prisma.SupplementInclude;
 
+    const orderBy: Prisma.SupplementOrderByWithRelationInput[] = [{ createdAt: 'desc' }, { id: 'desc' }];
+    if (referral?.createdBy) {
+      const principalWhere: Prisma.SupplementWhereInput = { AND: [where, { userId: referral.createdBy }] };
+      const otherWhere: Prisma.SupplementWhereInput = { AND: [where, { userId: { not: referral.createdBy } }] };
+      const [principalTotal, total] = await Promise.all([
+        this.prisma.supplement.count({ where: principalWhere }),
+        this.prisma.supplement.count({ where }),
+      ]);
+      // Page across the two groups, not just the current page's results.
+      const principalTake = Math.min(take, Math.max(0, principalTotal - skip));
+      const otherTake = Math.min(take - principalTake, Math.max(0, total - Math.max(skip, principalTotal)));
+      const [principalItems, otherItems] = await Promise.all([
+        principalTake > 0 ? this.prisma.supplement.findMany({
+          where: principalWhere, skip, take: principalTake, include, orderBy,
+        }) : Promise.resolve([]),
+        otherTake > 0 ? this.prisma.supplement.findMany({
+          where: otherWhere, skip: Math.max(0, skip - principalTotal), take: otherTake, include, orderBy,
+        }) : Promise.resolve([]),
+      ]);
+      return { items: [...principalItems, ...otherItems], total };
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.supplement.findMany({
         where,
         skip,
         take,
         include,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       }),
       this.prisma.supplement.count({ where }),
     ]);

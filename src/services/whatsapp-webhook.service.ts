@@ -58,6 +58,7 @@ export class WhatsAppWebhookService {
 
   private async upsertStatus(event: any): Promise<void> {
     const status = String(event.status).toLowerCase();
+    if (!['sent', 'delivered', 'read', 'failed'].includes(status)) return;
     const eventTimestamp = this.parseTimestamp(event.timestamp);
     const error = Array.isArray(event.errors) ? event.errors[0] : undefined;
     const statusTimestamp: Record<string, Date | null | undefined> = {
@@ -81,7 +82,18 @@ export class WhatsAppWebhookService {
     await this.prisma.whatsAppDelivery.upsert({
       where: { providerMessageId: String(event.id) },
       create: { providerMessageId: String(event.id), ...data },
-      update: data,
+      update: {},
+    });
+    // Apply the lifecycle condition in the write itself so concurrent/out-of-order
+    // callbacks cannot turn a read/delivered message back into sent or failed.
+    const allowed: Record<string, string[]> = {
+      sent: ['accepted', 'sent'], failed: ['accepted', 'sent', 'failed'],
+      delivered: ['accepted', 'sent', 'failed', 'delivered'], read: ['accepted', 'sent', 'failed', 'delivered', 'read'],
+    };
+    await this.prisma.whatsAppDelivery.updateMany({
+      where: { providerMessageId: String(event.id), status: { in: allowed[status] },
+        OR: [{ status: { not: status } }, { eventTimestamp: null }, { eventTimestamp: { lte: eventTimestamp || new Date(0) } }] },
+      data,
     });
   }
 

@@ -47,6 +47,7 @@ export const CreateBenfekUserSchema = CreatePrincipalProfileSchema.extend({
 });
 
 export const CreateBenfekRecordSchema = z.object({
+  notificationRemindersEnabled: z.boolean().optional().default(false),
   benfekName: z.string().min(2, 'Name must be at least 2 characters'),
   benfekEmail: z.string().email('Invalid email format').transform(val => val.trim()),
   benfekPhone: z.string().min(10, 'Phone must be at least 10 characters'),

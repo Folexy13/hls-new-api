@@ -18,6 +18,13 @@ export const config = {
     businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
     benfekTemplateName: process.env.WHATSAPP_BENFEK_TEMPLATE_NAME || '',
     benfekTemplateLanguage: process.env.WHATSAPP_BENFEK_TEMPLATE_LANGUAGE || 'en',
+    eventTemplateLanguage: process.env.WHATSAPP_EVENT_TEMPLATE_LANGUAGE || 'en',
+    eventTemplates: Object.fromEntries([
+      'order_processing', 'order_dispatched', 'order_delivered', 'cart_reminder',
+      'profile_incomplete', 'assessment_reminder', 'support_received', 'support_reply',
+      'pharmacy_referral', 'pharmacy_accepted',
+      'pack_available', 'assessment_completed', 'payment_successful', 'payment_failed', 'invoice',
+    ].map(kind => [kind, process.env[`WHATSAPP_TEMPLATE_${kind.toUpperCase()}`] || ''])),
   },
   email: {
     provider: process.env.EMAIL_PROVIDER || '',

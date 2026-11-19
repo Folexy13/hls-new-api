@@ -1,19 +1,8 @@
 # Benfek invitation notifications
 
-## Temporary browser diagnostics
-
-Deploy the updated backend and frontend. No diagnostic environment variable is
-required. After Add Benfek, inspect the browser console
-for `[Add Benfek] WhatsApp invitation failed`. Expand the object to see the HTTP
-status, provider error code/subcode, message, details, and Meta trace ID. Transport
-errors may have only a network code/message; configuration failures show a reason.
-Request headers, access tokens, and the full Axios error are never returned.
-
-The same diagnostic object appears under `data.whatsappDelivery.debug` in the
-Network response for `/api/v2/quiz-code/create`. This diagnoses submission failures,
-not asynchronous delivery failures that arrive later through the webhook.
-These temporary sanitized diagnostics are returned automatically on invitation
-failures. Remove the diagnostic response and console logging after troubleshooting.
+For the later Operations/helper rollout, see [Notification workflows](notification-workflows.md).
+That rollout requires its new migration; the no-new-migration statements below
+refer only to the original invitation endpoint connection.
 
 ## Deployment
 

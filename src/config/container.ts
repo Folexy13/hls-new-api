@@ -42,6 +42,9 @@ import { AccountService } from '../services/account.service';
 import { EmailDeliveryService } from '../services/email-delivery.service';
 import { WhatsAppWebhookService } from '../services/whatsapp-webhook.service';
 import { WhatsAppWebhookController } from '../controllers/whatsapp-webhook.controller';
+import { NotificationWorkflowService } from '../services/notification-workflow.service';
+import { InvoiceService } from '../services/invoice.service';
+import { OperationsController } from '../controllers/operations.controller';
 
 const container = new Container();
 
@@ -113,6 +116,9 @@ container.bind<EmailService>(EmailService).toSelf();
 container.bind<AccountService>(AccountService).toSelf();
 container.bind<EmailDeliveryService>(EmailDeliveryService).toSelf();
 container.bind<WhatsAppWebhookService>(WhatsAppWebhookService).toSelf();
+container.bind<NotificationWorkflowService>(NotificationWorkflowService).toSelf();
+container.bind<InvoiceService>(InvoiceService).toSelf();
+container.bind<OperationsController>(OperationsController).toSelf();
 
 // Bind controllers
 container.bind<NutrientTypeController>(NutrientTypeController).toSelf();

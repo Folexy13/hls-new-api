@@ -8,7 +8,6 @@ interface NotificationResult {
   stubbed?: boolean;
   payload?: any;
   reason?: string;
-  debugError?: Record<string, unknown>;
 }
 
 @injectable()
@@ -95,39 +94,8 @@ export class NotificationService {
       return {
         success: false,
         reason: error?.message || 'WhatsApp request failed',
-        debugError: this.describeWhatsAppError(error),
       };
     }
-  }
-
-  // Temporary testing diagnostics: never serialize an Axios request or its headers.
-  private describeWhatsAppError(error: any): Record<string, unknown> {
-    const upstream = error?.response?.data?.error || error?.response?.data || {};
-    const redact = (value: unknown): string | undefined => {
-      if (typeof value !== 'string') return undefined;
-      for (const secret of [config.whatsapp.apiKey, config.whatsapp.appSecret, config.whatsapp.verifyToken]) {
-        if (secret) value = (value as string).split(secret).join('[REDACTED]');
-      }
-      return value as string;
-    };
-    return {
-      httpStatus: typeof error?.response?.status === 'number' ? error.response.status : undefined,
-      networkCode: redact(error?.code),
-      error: {
-        message: redact(upstream.message) || redact(error?.message) || 'WhatsApp request failed',
-        type: redact(upstream.type),
-        code: typeof upstream.code === 'number' ? upstream.code : undefined,
-        error_subcode: typeof upstream.error_subcode === 'number' ? upstream.error_subcode : undefined,
-        is_transient: typeof upstream.is_transient === 'boolean' ? upstream.is_transient : undefined,
-        error_user_title: redact(upstream.error_user_title),
-        error_user_msg: redact(upstream.error_user_msg),
-        fbtrace_id: redact(upstream.fbtrace_id),
-        error_data: {
-          messaging_product: redact(upstream.error_data?.messaging_product),
-          details: redact(upstream.error_data?.details),
-        },
-      },
-    };
   }
 
   private async sendEmailPayload(payload: any): Promise<NotificationResult> {
@@ -175,7 +143,6 @@ export class NotificationService {
         },
         update: {
           recipient: recipient ? String(recipient) : undefined,
-          status: 'accepted',
         },
       });
     } catch (error) {
@@ -202,12 +169,20 @@ export class NotificationService {
     whatsappText: string;
     whatsappImageUrl?: string;
     whatsappCaption?: string;
+    whatsappEvent?: { kind: string; values: string[] };
   }): Promise<NotificationResult> {
     const results: any[] = [];
     let success = true;
 
     if (options.phone) {
-      const whatsappResult = options.whatsappImageUrl
+      const templateName = options.whatsappEvent && config.whatsapp.eventTemplates[options.whatsappEvent.kind];
+      const whatsappResult = options.whatsappEvent && !templateName && this.isMetaProvider()
+        ? { success: false, reason: `WHATSAPP_TEMPLATE_${options.whatsappEvent.kind.toUpperCase()} is not configured` }
+        : templateName && this.isMetaProvider()
+        ? await this.sendWhatsAppTemplate(options.phone, templateName, config.whatsapp.eventTemplateLanguage, [{
+          type: 'body', parameters: options.whatsappEvent!.values.map(text => ({ type: 'text', text })),
+        }])
+        : options.whatsappImageUrl
         ? await this.sendWhatsAppImage(options.phone, options.whatsappImageUrl, options.whatsappCaption || options.whatsappText)
         : await this.sendWhatsAppText(options.phone, options.whatsappText);
 
@@ -225,7 +200,7 @@ export class NotificationService {
       return this.logStub('sendWhatsAppAndEmail', options);
     }
 
-    return { success, payload: results };
+    return { success, payload: results, reason: results.find(result => !result.success)?.reason };
   }
 
   async sendWhatsAppText(to: string, message: string): Promise<NotificationResult> {
@@ -382,13 +357,14 @@ export class NotificationService {
     packName: string;
     code: string;
   }): Promise<NotificationResult> {
-    const link = this.buildQuizLink(options.code);
+    const link = `${this.frontendBaseUrl.replace(/\/$/, '')}/benfek/dashboard`;
     const text = `Good news! Your nutrient pack "${options.packName}" is now available. View it here: ${link}`;
 
     return this.sendWhatsAppAndEmail({
       phone: options.phone,
       email: options.email,
       subject: 'Nutrient Pack Available',
+      whatsappEvent: { kind: 'pack_available', values: [options.packName, link] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -400,20 +376,17 @@ export class NotificationService {
       return { success: true, reason: 'Not a benfek user' };
     }
 
-    if (!user.preferredVendorAccepted || !user.preferredVendorName) {
+    if (!user.pharmacyAccepted || !user.preferredPharmacyName) {
       return { success: true, reason: 'No preferred vendor acceptance data' };
     }
 
-    if (user.preferredVendorNotifiedAt) {
-      return { success: true, reason: 'Notifications already sent' };
-    }
-
-    const text = `Your favorite pharmacy ${user.preferredVendorName} has been accepted as your HLS preferred vendor. Visit your dashboard to continue.`;
+    const text = `Your favorite pharmacy ${user.preferredPharmacyName} has been accepted as your HLS preferred vendor. Visit your dashboard to continue.`;
 
     return this.sendWhatsAppAndEmail({
       phone: user.phone,
       email: user.email,
       subject: 'Preferred Pharmacy Accepted',
+      whatsappEvent: { kind: 'pharmacy_accepted', values: [user.preferredPharmacyName] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -433,10 +406,17 @@ export class NotificationService {
       phone: options.pharmacyPhone,
       email: options.pharmacyEmail,
       subject: 'New Benfek Referral',
+      whatsappEvent: { kind: 'pharmacy_referral', values: [options.benfekName] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
     });
+  }
+
+  async sendInvoiceLink(options: { phone?: string; invoiceUrl: string }): Promise<NotificationResult> {
+    const message = `Your HLS invoice is ready. Sign in to review it: ${options.invoiceUrl}`;
+    return this.sendWhatsAppAndEmail({ phone: options.phone, subject: 'Your HLS Invoice', html: '', text: message,
+      whatsappText: message, whatsappEvent: { kind: 'invoice', values: [options.invoiceUrl] } });
   }
 
   async sendInvoiceImage(options: {
@@ -449,6 +429,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'Your HLS Invoice',
+      whatsappEvent: { kind: 'invoice', values: [options.imageUrl] },
       html: `<p>${options.caption}</p><img src="${options.imageUrl}" alt="Invoice" />`,
       text: options.caption,
       whatsappText: options.caption,
@@ -468,6 +449,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Assessment Completed',
+      whatsappEvent: { kind: 'assessment_completed', values: [options.benfekName || 'Benfek'] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -486,6 +468,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Payment Successful',
+      whatsappEvent: { kind: 'payment_successful', values: [options.orderNumber, String(options.amount)] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -503,6 +486,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Payment Failed',
+      whatsappEvent: { kind: 'payment_failed', values: [options.orderNumber] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -520,6 +504,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Order Processing',
+      whatsappEvent: { kind: 'order_processing', values: [options.orderNumber] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -538,6 +523,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Order Dispatched',
+      whatsappEvent: { kind: 'order_dispatched', values: [options.orderNumber, options.deliveryAddress] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -555,6 +541,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Order Delivered',
+      whatsappEvent: { kind: 'order_delivered', values: [options.orderNumber] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -573,6 +560,7 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Cart Reminder',
+      whatsappEvent: { kind: 'cart_reminder', values: [String(options.itemCount)] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -591,26 +579,35 @@ export class NotificationService {
       phone: options.phone,
       email: options.email,
       subject: 'HLS Profile Incomplete',
+      whatsappEvent: { kind: 'profile_incomplete', values: [options.missingFields] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
     });
   }
 
+  private supportLink(role?: string) {
+    const path = role === 'principal' ? '/principal/support' : role === 'wholesaler' ? '/wholesaler/support' : '/support';
+    return `${this.frontendBaseUrl.replace(/\/$/, '')}${path}?tab=history`;
+  }
+
   async sendSupportTicketReceivedMessage(options: {
     phone?: string;
     email?: string;
     subject: string;
+    role?: string;
   }): Promise<NotificationResult> {
+    const link = this.supportLink(options.role);
     const text = `We’ve received your support request: "${options.subject}". HLS support will review it and get back to you.`;
 
     return this.sendWhatsAppAndEmail({
       phone: options.phone,
       email: options.email,
       subject: 'HLS Support Request Received',
-      html: `<p>${text}</p>`,
-      text,
-      whatsappText: text,
+      whatsappEvent: { kind: 'support_received', values: [options.subject, link] },
+      html: `<p>${text}</p><p>${link}</p>`,
+      text: `${text} View your request: ${link}`,
+      whatsappText: `${text} View your request: ${link}`,
     });
   }
 
@@ -618,14 +615,16 @@ export class NotificationService {
     phone?: string;
     email?: string;
     subject: string;
+    role?: string;
   }): Promise<NotificationResult> {
-    const supportLink = `${this.frontendBaseUrl.replace(/\/$/, '')}/support`;
+    const supportLink = this.supportLink(options.role);
     const text = `You have a new HLS support update: "${options.subject}". Please check your support inbox: ${supportLink}`;
 
     return this.sendWhatsAppAndEmail({
       phone: options.phone,
       email: options.email,
       subject: 'HLS Support Update',
+      whatsappEvent: { kind: 'support_reply', values: [options.subject, supportLink] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
@@ -637,14 +636,16 @@ export class NotificationService {
     email?: string;
     benfekName?: string;
     code: string;
+    registered?: boolean;
   }): Promise<NotificationResult> {
-    const link = this.buildQuizLink(options.code);
-    const text = `Hi ${options.benfekName ?? 'Benfek'}, your HLS assessment is still pending. Use your code ${options.code} to complete it here: ${link}`;
+    const link = options.registered ? `${this.frontendBaseUrl.replace(/\/$/, '')}/benfek/my-profile` : this.buildQuizLink(options.code);
+    const text = `Hi ${options.benfekName ?? 'Benfek'}, your HLS assessment is still pending. ${options.registered ? 'Complete it here' : `Use your code ${options.code} to complete it here`}: ${link}`;
 
     return this.sendWhatsAppAndEmail({
       phone: options.phone,
       email: options.email,
       subject: 'HLS Assessment Reminder',
+      whatsappEvent: { kind: 'assessment_reminder', values: [options.benfekName || 'Benfek', options.code, link] },
       html: `<p>${text}</p>`,
       text,
       whatsappText: text,
