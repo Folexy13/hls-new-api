@@ -21,6 +21,7 @@ const optionalMultiValueField = z
   });
 
 export const CreateQuizCodeSchema = z.object({
+  notificationRemindersEnabled: z.boolean().optional().default(false),
   benfekName: z.string().min(1, 'Benfek name is required'),
   benfekEmail: z.string().email('Invalid email format'),
   benfekPhone: z.string().min(1, 'Benfek phone is required'),

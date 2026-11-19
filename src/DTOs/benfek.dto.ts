@@ -30,6 +30,7 @@ export const UpdateBenfekProfileSchema = z
     dropOffAddress: optionalTrimmedString,
     preferredPharmacyName: optionalTrimmedString,
     preferredPharmacyPhone: optionalTrimmedString,
+    notificationRemindersEnabled: z.boolean().optional(),
     benfekName: optionalTrimmedString,
     benfekAge: optionalTrimmedString,
     benfekGender: optionalTrimmedString,

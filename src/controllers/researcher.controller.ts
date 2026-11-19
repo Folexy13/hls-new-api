@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import { AuthenticatedRequest } from '../types/auth.types';
 import { ResponseUtil } from '../utilities/response.utility';
 import { NotificationService } from '../services/notification.service';
+import { NotificationWorkflowService } from '../services/notification-workflow.service';
 import {
   DispatchPackSchema,
   CreateOperationalPaymentSchema,
@@ -20,7 +21,8 @@ export class ResearcherController {
   constructor(
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
-    @inject(SupplementService) private supplementService: SupplementService
+    @inject(SupplementService) private supplementService: SupplementService,
+    @inject(NotificationWorkflowService) private notificationWorkflows: NotificationWorkflowService,
   ) {}
 
   private truncateText(value: string, maxLength: number): string {
@@ -320,196 +322,216 @@ export class ResearcherController {
       });
       if (!quizCode) return ResponseUtil.error(res, 'Invalid benfek code', 404);
 
-      const pack = await this.prisma.researcherPack.upsert({
-        where: {
-          quizCode_packId: {
+      const itemData = data.items || (data.supplementIds || []).map((id: number) => ({ id, quantity: 1 }));
+      // Publish the pack, its items and the durable notification together.
+      const { result, notification, firstDispatch } = await this.prisma.$transaction(async tx => {
+        const previous = await tx.researcherPack.findUnique({
+          where: { quizCode_packId: { quizCode: data.code, packId: data.packId } },
+        });
+        const pack = await tx.researcherPack.upsert({
+          where: {
+            quizCode_packId: {
+              quizCode: data.code,
+              packId: data.packId,
+            },
+          },
+          create: {
             quizCode: data.code,
             packId: data.packId,
+            packName: data.packName,
+            rationale: data.rationale || null,
+            researcherId: req.user.id,
+            status: data.status,
           },
-        },
-        create: {
-          quizCode: data.code,
-          packId: data.packId,
-          packName: data.packName,
-          rationale: data.rationale || null,
-          researcherId: req.user.id,
-          status: data.status,
-        },
-        update: {
-          packName: data.packName,
-          rationale: data.rationale || null,
-          researcherId: req.user.id,
-          status: data.status,
-        },
-      });
+          update: {
+            packName: data.packName,
+            rationale: data.rationale || null,
+            researcherId: req.user.id,
+            status: data.status,
+          },
+        });
 
-      const itemData = (data as any).items || (data.supplementIds || []).map((id: number) => ({ id, quantity: 1 }));
-      const activeIds = itemData.map((i: any) => i.id);
+        const activeIds = itemData.map((i: any) => i.id);
 
-      await this.prisma.researcherPackItem.deleteMany({
-        where: {
-          packId: pack.id,
-          supplementId: { notIn: activeIds },
-        },
-      });
+        await tx.researcherPackItem.deleteMany({
+          where: {
+            packId: pack.id,
+            supplementId: { notIn: activeIds },
+          },
+        });
 
-      await Promise.all(
-        itemData.map((item: any) =>
-          this.prisma.researcherPackItem.upsert({
-            where: {
-              packId_supplementId: {
+        await Promise.all(
+          itemData.map((item: any) =>
+            tx.researcherPackItem.upsert({
+              where: {
+                packId_supplementId: {
+                  packId: pack.id,
+                  supplementId: item.id,
+                },
+              },
+              create: {
                 packId: pack.id,
                 supplementId: item.id,
-              },
-            },
-            create: {
-              packId: pack.id,
-              supplementId: item.id,
-              quantity: item.quantity,
-              rationale: item.rationale || null,
-              selectedWholesalerName: item.selectedWholesalerName || null,
-              selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
-              selectedWholesalerContact: item.selectedWholesalerContact || null,
-              selectedWholesalerAddress: item.selectedWholesalerAddress || null,
-              selectedWholesalerDetails: item.selectedWholesalerName
-                ? {
-                    name: item.selectedWholesalerName,
-                    price: item.selectedWholesalerPrice ?? null,
-                    contact: item.selectedWholesalerContact || null,
-                    address: item.selectedWholesalerAddress || null,
-                  }
-                : null,
-              requiresReselection: !item.selectedWholesalerName,
-              dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
-              effectiveMarkupFactor: 1.3,
-            } as any,
-            update: {
-              quantity: item.quantity,
-              rationale: item.rationale || null,
-              selectedWholesalerName: item.selectedWholesalerName || null,
-              selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
-              selectedWholesalerContact: item.selectedWholesalerContact || null,
-              selectedWholesalerAddress: item.selectedWholesalerAddress || null,
-              selectedWholesalerDetails: item.selectedWholesalerName
-                ? {
-                    name: item.selectedWholesalerName,
-                    price: item.selectedWholesalerPrice ?? null,
-                    contact: item.selectedWholesalerContact || null,
-                    address: item.selectedWholesalerAddress || null,
-                  }
-                : null,
-              requiresReselection: !item.selectedWholesalerName,
-              dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
-              effectiveMarkupFactor: 1.3,
-            } as any,
-          })
-        )
-      );
+                quantity: item.quantity,
+                rationale: item.rationale || null,
+                selectedWholesalerName: item.selectedWholesalerName || null,
+                selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
+                selectedWholesalerContact: item.selectedWholesalerContact || null,
+                selectedWholesalerAddress: item.selectedWholesalerAddress || null,
+                selectedWholesalerDetails: item.selectedWholesalerName
+                  ? {
+                      name: item.selectedWholesalerName,
+                      price: item.selectedWholesalerPrice ?? null,
+                      contact: item.selectedWholesalerContact || null,
+                      address: item.selectedWholesalerAddress || null,
+                    }
+                  : null,
+                requiresReselection: !item.selectedWholesalerName,
+                dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
+                effectiveMarkupFactor: 1.3,
+              } as any,
+              update: {
+                quantity: item.quantity,
+                rationale: item.rationale || null,
+                selectedWholesalerName: item.selectedWholesalerName || null,
+                selectedWholesalerPrice: item.selectedWholesalerPrice ?? null,
+                selectedWholesalerContact: item.selectedWholesalerContact || null,
+                selectedWholesalerAddress: item.selectedWholesalerAddress || null,
+                selectedWholesalerDetails: item.selectedWholesalerName
+                  ? {
+                      name: item.selectedWholesalerName,
+                      price: item.selectedWholesalerPrice ?? null,
+                      contact: item.selectedWholesalerContact || null,
+                      address: item.selectedWholesalerAddress || null,
+                    }
+                  : null,
+                requiresReselection: !item.selectedWholesalerName,
+                dispatchedWithoutWholesaler: Boolean(item.forceDispatchWithoutWholesaler),
+                effectiveMarkupFactor: 1.3,
+              } as any,
+            })
+          )
+        );
 
-      const result = await this.prisma.researcherPack.findUnique({
-        where: { id: pack.id },
-        include: { items: { include: { supplement: true } } },
+        const result = await tx.researcherPack.findUnique({
+          where: { id: pack.id },
+          include: { items: { include: { supplement: true } } },
+        });
+        const notification = data.status === 'dispatched'
+          ? await this.notificationWorkflows.enqueue(`pack-ready:${pack.id}`, 'pack_available',
+            { packId: pack.id }, undefined, quizCode.id, tx)
+          : null;
+        return { result, notification, firstDispatch: previous?.status !== 'dispatched' };
       });
 
-      if (result && data.status === 'dispatched') {
-        const checkers = await (this.prisma.user.findMany({
-          where: { role: 'researcher', researcherType: 'checker' as any },
-          select: { id: true, email: true, firstName: true, lastName: true },
-        }) as any);
+      if (result && data.status === 'dispatched' && firstDispatch) {
+        try {
+          const checkers = await (this.prisma.user.findMany({
+            where: { role: 'researcher', researcherType: 'checker' as any },
+            select: { id: true, email: true, firstName: true, lastName: true },
+          }) as any);
 
-        if (Array.isArray(checkers) && checkers.length) {
-          const items = (result.items || []) as any[];
-          const payloadItemsById = new Map<number, any>(
-            itemData.map((item: any) => [Number(item.id), item] as [number, any])
-          );
-          const sellingTotal = items.reduce((sum, item) => {
-            const price = Number(item?.supplement?.price || 0);
-            const qty = Number(item?.quantity || 1);
-            return sum + price * qty;
-          }, 0);
-
-          const wholesaleTotal = items.reduce((sum, item) => {
-            const qty = Number(item?.quantity || 1);
-            const source = payloadItemsById.get(Number(item.supplementId));
-            const price = Number(source?.selectedWholesalerPrice || 0);
-            if (price > 0) {
+          if (Array.isArray(checkers) && checkers.length) {
+            const items = (result.items || []) as any[];
+            const payloadItemsById = new Map<number, any>(
+              itemData.map((item: any) => [Number(item.id), item] as [number, any])
+            );
+            const sellingTotal = items.reduce((sum, item) => {
+              const price = Number(item?.supplement?.price || 0);
+              const qty = Number(item?.quantity || 1);
               return sum + price * qty;
-            }
+            }, 0);
 
-            return sum + Number(item?.supplement?.price || 0) * qty / 1.3;
-          }, 0);
+            const wholesaleTotal = items.reduce((sum, item) => {
+              const qty = Number(item?.quantity || 1);
+              const source = payloadItemsById.get(Number(item.supplementId));
+              const price = Number(source?.selectedWholesalerPrice || 0);
+              if (price > 0) {
+                return sum + price * qty;
+              }
 
-          const principalName = `${quizCode.creator.firstName} ${quizCode.creator.lastName}`.trim();
-          const marginTotal = sellingTotal - wholesaleTotal;
+              return sum + Number(item?.supplement?.price || 0) * qty / 1.3;
+            }, 0);
 
-          const lines = items.map((item) => {
-            const name = String(item?.supplement?.name || 'Unknown');
-            const sell = Number(item?.supplement?.price || 0);
-            const qty = Number(item?.quantity || 1);
-            const source = payloadItemsById.get(Number(item.supplementId));
-            const sourcePrice =
-              Number(source?.selectedWholesalerPrice || 0) > 0
-                ? Number(source?.selectedWholesalerPrice || 0)
-                : sell / 1.3;
-            const margin = sell - sourcePrice;
-            const sourceLabel = source?.selectedWholesalerName
-              ? `${source.selectedWholesalerName} NGN ${sourcePrice.toLocaleString()}`
-              : `Fallback markup 1.3 (cost NGN ${Math.round(sourcePrice).toLocaleString()})`;
-            return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | source ${sourceLabel} | margin NGN ${Math.round(margin).toLocaleString()}`;
-          });
+            const principalName = `${quizCode.creator.firstName} ${quizCode.creator.lastName}`.trim();
+            const marginTotal = sellingTotal - wholesaleTotal;
 
-          const subject = `Pack dispatched: ${result.packName} (${data.code})`;
-          const baseMessage = [
-            `Benfek: ${quizCode.benfekName} (${quizCode.benfekPhone})`,
-            `Code: ${data.code}`,
-            `Pack: ${result.packName}`,
-            `Principal: ${principalName} (${quizCode.creator.email})`,
-            `Items: ${items.length}`,
-            `Top item: ${lines[0] || 'N/A'}`,
-            `Totals: sell NGN ${sellingTotal.toLocaleString()} | wholesale NGN ${wholesaleTotal.toLocaleString()} | margin NGN ${marginTotal.toLocaleString()}`,
-          ].join('\n');
-          const message = this.truncateText(baseMessage, 240);
+            const lines = items.map((item) => {
+              const name = String(item?.supplement?.name || 'Unknown');
+              const sell = Number(item?.supplement?.price || 0);
+              const qty = Number(item?.quantity || 1);
+              const source = payloadItemsById.get(Number(item.supplementId));
+              const sourcePrice =
+                Number(source?.selectedWholesalerPrice || 0) > 0
+                  ? Number(source?.selectedWholesalerPrice || 0)
+                  : sell / 1.3;
+              const margin = sell - sourcePrice;
+              const sourceLabel = source?.selectedWholesalerName
+                ? `${source.selectedWholesalerName} NGN ${sourcePrice.toLocaleString()}`
+                : `Fallback markup 1.3 (cost NGN ${Math.round(sourcePrice).toLocaleString()})`;
+              return `- ${name} x${qty}: sell NGN ${sell.toLocaleString()} | source ${sourceLabel} | margin NGN ${Math.round(margin).toLocaleString()}`;
+            });
 
-          await this.prisma.inbox.createMany({
-            data: checkers.map((checker: any) => ({
-              userId: checker.id,
-              subject,
-              message,
-              isRead: false,
-            })),
-          });
+            const subject = `Pack dispatched: ${result.packName} (${data.code})`;
+            const baseMessage = [
+              `Benfek: ${quizCode.benfekName} (${quizCode.benfekPhone})`,
+              `Code: ${data.code}`,
+              `Pack: ${result.packName}`,
+              `Principal: ${principalName} (${quizCode.creator.email})`,
+              `Items: ${items.length}`,
+              `Top item: ${lines[0] || 'N/A'}`,
+              `Totals: sell NGN ${sellingTotal.toLocaleString()} | wholesale NGN ${wholesaleTotal.toLocaleString()} | margin NGN ${marginTotal.toLocaleString()}`,
+            ].join('\n');
+            const message = this.truncateText(baseMessage, 240);
 
-          await Promise.all(
-            checkers
-              .filter((checker: any) => checker.email)
-              .map((checker: any) => {
-                const plainText = [baseMessage, '', 'Item sourcing', ...lines].join('\n');
-                const escapedText = plainText
-                  .replace(/&/g, '&')
-                  .replace(/</g, '<')
-                  .replace(/>/g, '>')
-                  .replace(/"/g, '"')
-                  .replace(/'/g, '&#039;');
-                return this.notificationService.sendEmail(
-                  checker.email,
-                  subject,
-                  // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-                  `<pre>${escapedText}</pre>`,
-                  plainText
-                ).catch(() => undefined);
-              })
-          );
+            await this.prisma.inbox.createMany({
+              data: checkers.map((checker: any) => ({
+                userId: checker.id,
+                subject,
+                message,
+                isRead: false,
+              })),
+            });
+
+            await Promise.all(
+              checkers
+                .filter((checker: any) => checker.email)
+                .map((checker: any) => {
+                  const plainText = [baseMessage, '', 'Item sourcing', ...lines].join('\n');
+                  const escapedText = plainText
+                    .replace(/&/g, '&')
+                    .replace(/</g, '<')
+                    .replace(/>/g, '>')
+                    .replace(/"/g, '"')
+                    .replace(/'/g, '&#039;');
+                  return this.notificationService.sendEmail(
+                    checker.email,
+                    subject,
+                    // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
+                    `<pre>${escapedText}</pre>`,
+                    plainText
+                  ).catch(() => undefined);
+                })
+            );
+          }
+        } catch (error) {
+          console.error('[Pack dispatch] Checker notification failed', error instanceof Error ? error.message : 'Unknown error');
         }
 
         await this.notificationService.sendPackAvailableMessage({
-          phone: quizCode.benfekPhone,
           email: quizCode.benfekEmail || undefined,
           packName: result.packName,
           code: data.code,
         }).catch(() => undefined);
       }
 
-      return ResponseUtil.success(res, { pack: result }, 'Pack dispatched to benfek');
+      return ResponseUtil.success(res, {
+        pack: result,
+        whatsappDelivery: notification ? {
+          status: notification.status === 'pending' ? 'queued' : notification.status,
+          jobId: notification.id,
+        } : null,
+      }, data.status === 'dispatched' ? 'Pack dispatched to benfek' : 'Pack draft saved');
     } catch (error) {
       if (error instanceof ZodError) return ResponseUtil.error(res, 'Validation failed', 400, error);
       return ResponseUtil.error(res, 'Failed to dispatch pack', 500, error);
