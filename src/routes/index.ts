@@ -14,6 +14,8 @@ import { createResearcherRoutes } from './researcher.routes';
 import { createBenfekRoutes } from './benfek.routes';
 import { createContentRoutes } from './content.routes';
 import { createWhatsAppWebhookRoutes } from './whatsapp-webhook.routes';
+import { createOperationsRoutes } from './operations.routes';
+import { createSupportRoutes } from './support.routes';
 
 export const createRoutes = (container: Container): Router => {
   const router = Router();
@@ -51,6 +53,8 @@ export const createRoutes = (container: Container): Router => {
   // Mount benfek routes
   router.use('/benfek', createBenfekRoutes(container));
   router.use('/content', createContentRoutes(container));
+  router.use('/operations', createOperationsRoutes(container));
+  router.use('/support', createSupportRoutes(container));
 
   return router;
 };

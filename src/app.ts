@@ -11,6 +11,7 @@ import cors from "cors";
 import cron from "node-cron";
 import axios from "axios";
 import { EmailDeliveryService } from "./services/email-delivery.service";
+import { NotificationWorkflowService } from './services/notification-workflow.service';
 const PORT = process.env.PORT || 3000;
 const allowedOrigins =config.corsAllowedOrigins;
 const app = express();
@@ -114,6 +115,14 @@ app.listen(PORT, () => {
     } catch (error: any) {
       console.error('[EmailDelivery] Retry processing failed:', error?.message || error);
     }
+  });
+
+  const workflows = container.get(NotificationWorkflowService);
+  cron.schedule('* * * * *', async () => {
+    await workflows.processPending().catch(error => console.error('[Notifications] Worker failed', error?.message));
+  });
+  cron.schedule('15 * * * *', async () => {
+    await workflows.scheduleReminders().catch(error => console.error('[Notifications] Reminder scheduling failed', error?.message));
   });
 
   console.log('🕒 Keep-alive cron job started (runs every 6 seconds)');

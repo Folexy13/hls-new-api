@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { normalizeEmail, normalizePhone } from "../utilities/contact-normalizer.utility";
 import { ensureOperationalQuizCodeForBenfek } from "../utilities/benfek-link.utility";
 import { EmailDeliveryService } from "./email-delivery.service";
+import { NotificationWorkflowService } from './notification-workflow.service';
 
 const HLS_PHARMACY_NAME = "HLS Pharmacy";
 
@@ -60,7 +61,8 @@ export class AuthService {
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
     @inject(EmailService) private emailService: EmailService,
-    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService
+    @inject(EmailDeliveryService) private emailDeliveryService: EmailDeliveryService,
+    @inject(NotificationWorkflowService) private workflows: NotificationWorkflowService
   ) {}
 
   async register(data: RegisterUserDTO) {
@@ -129,8 +131,6 @@ export class AuthService {
         console.error("Failed to auto-link benfek quiz code on login:", error);
       });
     }
-
-    await this.notificationService.notifyPreferredVendorAcceptance(user).catch(() => undefined);
 
     return this.createAuthResponse(user);
   }
@@ -314,16 +314,21 @@ export class AuthService {
     let operationalQuizCode = null;
 
     if (data.quizCode) {
-      const linked = await this.prisma.quizCode.updateMany({
-        where: {
-          code: data.quizCode,
-          OR: [{ usedBy: null }, { usedBy: user.id }],
-        },
-        data: {
-          usedBy: user.id,
-          isUsed: true,
-          usedAt: new Date(),
-        },
+      const linked = await this.prisma.$transaction(async tx => {
+        const result = await tx.quizCode.updateMany({
+          where: {
+            code: data.quizCode,
+            OR: [{ usedBy: null }, { usedBy: user.id }],
+          },
+          data: {
+            usedBy: user.id,
+            isUsed: true,
+            usedAt: new Date(),
+          },
+        });
+        if (result.count === 1 && linkedQuizCode?.usedBy == null && linkedQuizCode?.preferenceBudget != null)
+          await this.workflows.enqueueAssessmentCompleted(linkedQuizCode.id, tx);
+        return result;
       });
       operationalQuizCode = await this.prisma.quizCode.findUnique({
         where: { code: data.quizCode },
@@ -334,7 +339,6 @@ export class AuthService {
       // The standalone quiz is submitted before the Benfek account exists.
       if (linked.count === 1 && linkedQuizCode?.usedBy == null && linkedQuizCode?.preferenceBudget != null) {
         await this.notificationService.sendAssessmentCompletedMessage({
-          phone: user.phone || undefined,
           email: user.email,
           benfekName: user.firstName || linkedQuizCode.benfekName,
         }).catch(error => console.error('[AuthService] Assessment notification failed', error));
@@ -348,6 +352,8 @@ export class AuthService {
         phone: user.phone,
       });
     }
+
+    await this.workflows.syncPharmacySelection(user.id).catch(error => console.error('[Pharmacy] Selection notification failed', error?.message));
 
     // Notify admin
     await this.emailService.notifyAdmin(

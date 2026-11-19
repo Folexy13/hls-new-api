@@ -106,51 +106,64 @@ test('new Benfek receives completion notification after registration links their
   for (const budget of [5000, null]) {
     const events = [];
     const user = { id: 20, email: invitation.benfekEmail, phone: invitation.benfekPhone, firstName: 'Test' };
-    const service = new AuthService({
-      findUserByEmail: async () => null, findUserByPhone: async () => null,
-      createUser: async () => { events.push('registered'); return user; },
-    }, {
+    const db = {
       quizCode: {
         findUnique: async () => ({ ...invitation, usedBy: null, preferenceBudget: budget }),
         updateMany: async () => { events.push('linked'); return { count: 1 }; },
       },
-    }, {
+    };
+    db.$transaction = async action => action(db);
+    const service = new AuthService({
+      findUserByEmail: async () => null, findUserByPhone: async () => null,
+      createUser: async () => { events.push('registered'); return user; },
+    }, db, {
       sendAssessmentCompletedMessage: async options => {
         events.push('notified');
-        assert.equal(options.phone, user.phone);
+        assert.equal(options.phone, undefined);
         throw new Error('Provider unavailable');
       },
-    }, { notifyAdmin: async () => undefined }, { sendBenfekWelcome: async () => sentEmail });
+    }, { notifyAdmin: async () => undefined }, { sendBenfekWelcome: async () => sentEmail }, {
+      syncPharmacySelection: async () => undefined,
+      enqueueAssessmentCompleted: async (id, tx) => { assert.equal(id, invitation.id); assert.equal(tx, db); events.push('queued'); },
+    });
     service.createAuthResponse = async () => ({ user });
     const result = await service.registerUnreferredBenfek({
       email: user.email, phone: user.phone, firstName: 'Test', lastName: 'Benfek',
       password: 'test-password', quizCode: invitation.code,
     });
     assert.equal(result.user.id, 20);
-    assert.deepEqual(events, budget ? ['registered', 'linked', 'notified'] : ['registered', 'linked']);
+    assert.deepEqual(events, budget ? ['registered', 'linked', 'queued', 'notified'] : ['registered', 'linked']);
   }
 });
 
 test('completion endpoint defers new users and avoids notifications on repeat submissions', async () => {
   for (const [usedBy, budget, expected] of [[null, null, 0], [20, null, 1], [20, 5000, 0]]) {
     let notifications = 0;
+    let queued = 0;
+    const db = {
+      user: { findUnique: async () => ({ firstName: 'Test', email: invitation.benfekEmail }) },
+      quizCode: { update: async () => ({ ...invitation, usedBy, preferenceBudget: 5000 }) },
+    };
+    db.$transaction = async action => action(db);
     const controller = new QuizCodeController({}, {
       findByCode: async () => ({ ...invitation, createdBy: 1, usedBy, preferenceBudget: budget }),
       completeBenfekQuiz: async () => ({ ...invitation, preferenceBudget: 5000 }),
-    }, { user: { findUnique: async () => ({ firstName: 'Test', email: invitation.benfekEmail }) } }, {
-      sendAssessmentCompletedMessage: async () => { notifications++; throw new Error('Provider unavailable'); },
-    }, { notifyAdmin: async () => undefined }, {});
+    }, db, {
+      sendAssessmentCompletedMessage: async options => { assert.equal(options.phone, undefined); notifications++; throw new Error('Provider unavailable'); },
+    }, { notifyAdmin: async () => undefined }, {}, {
+      enqueueAssessmentCompleted: async (id, tx) => { assert.equal(tx, db); if (usedBy) queued++; },
+    });
     const res = response();
     await controller.completeBenfekQuiz({ body: completed }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(notifications, expected);
+    assert.equal(queued, expected);
   }
 });
 
-test('temporary diagnostics need no environment flag and redact credentials', async () => {
+test('invitation failures do not expose provider diagnostics or credentials', async () => {
   const original = { ...config.whatsapp };
   const originalPost = axios.post;
-  const originalFlag = process.env.WHATSAPP_DEBUG_ERRORS;
   try {
     Object.assign(config.whatsapp, {
       provider: 'meta', apiUrl: 'https://example.invalid/messages', apiKey: 'secret-test-token',
@@ -168,34 +181,22 @@ test('temporary diagnostics need no environment flag and redact credentials', as
         } } },
       });
     };
-    for (const legacyFlag of [undefined, 'false']) {
-      if (legacyFlag === undefined) delete process.env.WHATSAPP_DEBUG_ERRORS;
-      else process.env.WHATSAPP_DEBUG_ERRORS = legacyFlag;
-      const service = new NotificationService({});
-      const result = await service.sendBenfekCodeMessage({ phone: invitation.benfekPhone, code: invitation.code });
-      assert.equal(result.success, false);
-      assert.ok(result.debugError);
-      const controller = new QuizCodeController({}, { create: async () => invitation }, {}, service, {}, {
-        sendBenfekCode: async () => sentEmail,
-      });
-      const res = response();
-      await controller.createQuizCode({ user: { id: 1, role: 'principal' }, body: invitation }, res);
-      const debug = res.body.data.whatsappDelivery.debug;
-      assert.ok(debug);
-      assert.equal(debug.httpStatus, 400);
-      assert.equal(debug.error.code, 190);
-      assert.equal(debug.error.error_subcode, 463);
-      assert.equal(debug.error.fbtrace_id, 'test-trace');
-      assert.equal(debug.error.message, 'Invalid [REDACTED]');
-      assert.equal(debug.error.error_data.details, '[REDACTED] [REDACTED]');
-      const serialized = JSON.stringify(res.body);
-      assert.ok(!serialized.includes('secret-test-'));
-      assert.ok(!serialized.includes('Authorization'));
-    }
+    const service = new NotificationService({});
+    const result = await service.sendBenfekCodeMessage({ phone: invitation.benfekPhone, code: invitation.code });
+    assert.equal(result.success, false);
+    assert.equal(result.debugError, undefined);
+    const controller = new QuizCodeController({}, { create: async () => invitation }, {}, service, {}, {
+      sendBenfekCode: async () => sentEmail,
+    });
+    const res = response();
+    await controller.createQuizCode({ user: { id: 1, role: 'principal' }, body: invitation }, res);
+    const debug = res.body.data.whatsappDelivery.debug;
+    assert.equal(debug, undefined);
+    const serialized = JSON.stringify(res.body);
+    assert.ok(!serialized.includes('secret-test-'));
+    assert.ok(!serialized.includes('Authorization'));
   } finally {
     Object.assign(config.whatsapp, original);
     axios.post = originalPost;
-    if (originalFlag === undefined) delete process.env.WHATSAPP_DEBUG_ERRORS;
-    else process.env.WHATSAPP_DEBUG_ERRORS = originalFlag;
   }
 });

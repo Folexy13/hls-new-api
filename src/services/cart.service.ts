@@ -58,6 +58,7 @@ export class CartService {
       await this.cartRepository.addItem(cart.id, data.supplementId, data.quantity);
     }
 
+    await this.prisma.cart.update({ where: { id: cart.id }, data: { updatedAt: new Date() } });
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
   }
 
@@ -73,6 +74,7 @@ export class CartService {
     }
 
     await this.cartRepository.updateItem(itemId, data.quantity);
+    await this.prisma.cart.update({ where: { id: cart.id }, data: { updatedAt: new Date() } });
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
   }
@@ -89,6 +91,7 @@ export class CartService {
     }
 
     await this.cartRepository.removeItem(itemId);
+    await this.prisma.cart.update({ where: { id: cart.id }, data: { updatedAt: new Date() } });
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
   }
@@ -100,6 +103,7 @@ export class CartService {
     }
 
     await this.cartRepository.clearCart(cart.id);
+    await this.prisma.cart.update({ where: { id: cart.id }, data: { updatedAt: new Date() } });
 
     return this.cartRepository.findById(cart.id) as Promise<CartWithItems>;
   }

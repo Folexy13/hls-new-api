@@ -12,6 +12,9 @@ import {
   UpdateBenfekProfileSchema,
 } from '../DTOs/benfek.dto';
 import { NotificationService } from '../services/notification.service';
+import { NotificationWorkflowService } from '../services/notification-workflow.service';
+import { InvoiceService } from '../services/invoice.service';
+import { AppError } from '../utilities/errors';
 import { z } from 'zod';
 import { formatHealthField } from '../utilities/health-field.utility';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
@@ -64,7 +67,9 @@ export class BenfekController {
   constructor(
     @inject('PrismaClient') private prisma: PrismaClient,
     @inject(NotificationService) private notificationService: NotificationService,
-    @inject(EmailService) private emailService: EmailService
+    @inject(EmailService) private emailService: EmailService,
+    @inject(NotificationWorkflowService) private workflows: NotificationWorkflowService,
+    @inject(InvoiceService) private invoices: InvoiceService
   ) {}
 
   private buildPackFingerprint(items: Array<{
@@ -97,6 +102,7 @@ export class BenfekController {
         dropOffAddress: true,
         preferredPharmacyName: true,
         preferredPharmacyPhone: true,
+        notificationRemindersEnabled: true,
         role: true,
       },
     });
@@ -168,6 +174,7 @@ export class BenfekController {
           dropOffAddress: true,
           preferredPharmacyName: true,
           preferredPharmacyPhone: true,
+          notificationRemindersEnabled: true,
           role: true,
         },
       });
@@ -215,10 +222,24 @@ export class BenfekController {
   }
 
   private readonly supportTicketSchema = z.object({
-    category: z.string().trim().min(1, 'Category is required'),
-    subject: z.string().trim().min(1, 'Subject is required'),
-    message: z.string().trim().min(1, 'Message is required'),
+    category: z.string().trim().min(1, 'Category is required').max(80),
+    subject: z.string().trim().min(1, 'Subject is required').max(160),
+    message: z.string().trim().min(1, 'Message is required').max(5000),
   });
+
+  private async supportUser(req: AuthenticatedRequest, res: Response) {
+    if (!req.user?.id) {
+      ResponseUtil.error(res, 'Authentication required', 401);
+      return null;
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: req.user.id },
+      select: { id: true, role: true, firstName: true, lastName: true, email: true } });
+    if (!user || !['benfek', 'principal', 'wholesaler'].includes(user.role)) {
+      ResponseUtil.error(res, 'Support is available to Benfeks, principals and wholesalers', 403);
+      return null;
+    }
+    return user;
+  }
 
   private async syncBenfekNotifications(userId: number) {
     const user = await this.prisma.user.findUnique({
@@ -627,6 +648,7 @@ export class BenfekController {
         'dropOffAddress',
         'preferredPharmacyName',
         'preferredPharmacyPhone',
+        'notificationRemindersEnabled',
       ] as const;
 
       for (const field of userFields) {
@@ -764,13 +786,16 @@ export class BenfekController {
         }
 
         if (Object.keys(quizData).length > 0) {
-          await this.prisma.quizCode.update({
-            where: { id: quizCode.id },
-            data: quizData,
+          await this.prisma.$transaction(async tx => {
+            const previous = await tx.quizCode.findUnique({ where: { id: quizCode.id } });
+            await tx.quizCode.update({ where: { id: quizCode.id }, data: quizData });
+            if (previous?.preferenceBudget == null && quizData.preferenceBudget != null)
+              await this.workflows.enqueueAssessmentCompleted(quizCode.id, tx);
           });
         }
       }
 
+      await this.workflows.syncPharmacySelection(userId).catch(error => console.error('[Pharmacy] Selection notification failed', error?.message));
       const profile = await this.buildProfile(userId);
       return ResponseUtil.success(res, { profile }, 'Benfek profile updated');
     } catch (error) {
@@ -998,10 +1023,9 @@ export class BenfekController {
 
   getSupportTickets = async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return ResponseUtil.error(res, 'Authentication required', 401);
-      }
+      const user = await this.supportUser(req, res);
+      if (!user) return;
+      const userId = user.id;
 
       const tickets = await this.prisma.inbox.findMany({
         where: {
@@ -1010,6 +1034,7 @@ export class BenfekController {
             startsWith: '[Support]',
           },
         },
+        include: { replies: { orderBy: { createdAt: 'asc' } } },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -1030,6 +1055,7 @@ export class BenfekController {
               status: ticket.isRead ? 'resolved' : 'open',
               createdAt: ticket.createdAt,
               updatedAt: ticket.updatedAt,
+              replies: ticket.replies.map(reply => ({ id: reply.id, message: reply.message, createdAt: reply.createdAt })),
             };
           }),
         },
@@ -1042,24 +1068,25 @@ export class BenfekController {
 
   createSupportTicket = async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return ResponseUtil.error(res, 'Authentication required', 401);
-      }
+      const user = await this.supportUser(req, res);
+      if (!user) return;
+      const userId = user.id;
 
       const data = this.supportTicketSchema.parse(req.body);
-      const ticket = await this.prisma.inbox.create({
-        data: {
-          userId,
-          subject: `[Support] ${data.subject}`,
-          message: `Category: ${data.category}\n\n${data.message}`,
-          isRead: false,
-        },
+      const ticket = await this.prisma.$transaction(async tx => {
+        const saved = await tx.inbox.create({
+          data: {
+            userId,
+            subject: `[Support] ${data.subject}`,
+            message: `Category: ${data.category}\n\n${data.message}`,
+            isRead: false,
+          },
+        });
+        await this.workflows.enqueue(`support-received:${saved.id}`, 'support_received', { subject: data.subject }, userId, undefined, tx);
+        return saved;
       });
 
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      const isPrincipal = user?.role === 'principal';
-      const userType = isPrincipal ? 'Principal' : 'Benfek';
+      const userType = user.role.charAt(0).toUpperCase() + user.role.slice(1);
 
       await this.emailService.notifyAdmin(
         `New Support Ticket from ${userType}`,
@@ -1166,40 +1193,24 @@ export class BenfekController {
     }
   };
 
-  sendInvoiceImage = async (req: AuthenticatedRequest, res: Response) => {
+  requestInvoice = async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { imageUrl, caption, phone, email } = req.body as {
-        imageUrl?: string;
-        caption?: string;
-        phone?: string;
-        email?: string;
-      };
-
-      if (!imageUrl || typeof imageUrl !== 'string') {
-        return ResponseUtil.error(res, 'invoice image URL is required', 400);
-      }
-
-      const targetPhone = phone?.trim();
-      const targetEmail = email?.trim() || req.user.email;
-      const resolvedCaption =
-        typeof caption === 'string' && caption.trim().length > 0
-          ? caption.trim()
-          : 'Please review your HLS invoice.';
-
-      const result = await this.notificationService.sendInvoiceImage({
-        phone: targetPhone,
-        email: targetEmail,
-        imageUrl: imageUrl.trim(),
-        caption: resolvedCaption,
-      });
-
-      if (!result.success) {
-        return ResponseUtil.error(res, 'Failed to send invoice notification', 500, result.reason);
-      }
-
-      return ResponseUtil.success(res, { sent: true, result }, 'Invoice notification sent');
+      const result = await this.invoices.request(req.user.id, req.body);
+      return ResponseUtil.success(res, result, 'Invoice notification request saved', 202);
     } catch (error) {
-      return ResponseUtil.error(res, 'Failed to send invoice image', 500, error);
+      return ResponseUtil.error(res, error instanceof AppError ? error.message : 'Unable to request invoice',
+        error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500);
+    }
+  };
+
+  getInvoice = async (req: AuthenticatedRequest, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    try {
+      return ResponseUtil.success(res, { invoice: await this.invoices.read(req.user.id, String(req.params.id), req.query.token) });
+    } catch (error) {
+      return ResponseUtil.error(res, error instanceof AppError ? error.message : 'Unable to load invoice',
+        error instanceof AppError ? error.statusCode : 500);
     }
   };
 }

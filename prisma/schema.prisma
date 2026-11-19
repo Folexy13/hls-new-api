@@ -50,6 +50,10 @@ model User {
   referredPharmacyName String? @db.Text
   referredPharmacyPhone String? @db.Text
   showPricesToBenfeks Boolean    @default(true)
+  notificationRemindersEnabled Boolean @default(false)
+  notificationJobs NotificationJob[]
+  invoices Invoice[]
+  pharmacyRequest PharmacyRequest?
   profileImageUrl String?      @db.Text
   profession String?           @db.Text
   currentPlaceOfWork String?   @db.Text
@@ -358,6 +362,7 @@ model Inbox {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject   String
   message   String   @db.Text
+  replies   SupportReply[]
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -510,6 +515,8 @@ model QuizCode {
   id                Int       @id @default(autoincrement())
   code              String    @unique
   isUsed            Boolean   @default(false)
+  notificationRemindersEnabled Boolean @default(false)
+  notificationJobs NotificationJob[]
   usedBy            Int?      // User ID who used this code (benfek)
   usedAt            DateTime?
   expiresAt         DateTime? // Optional expiration date
@@ -540,5 +547,64 @@ model QuizCode {
   
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model NotificationJob {
+  id             Int @id @default(autoincrement())
+  idempotencyKey String @unique @db.VarChar(191)
+  kind           String @db.VarChar(64)
+  userId         Int?
+  user           User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizCodeId     Int?
+  quizCode       QuizCode? @relation(fields: [quizCodeId], references: [id], onDelete: Cascade)
+  payload        Json
+  status         String @default("pending") @db.VarChar(32)
+  attemptCount   Int @default(0)
+  nextAttemptAt  DateTime @default(now())
+  lockedAt       DateTime?
+  claimToken     String? @db.VarChar(64)
+  lastError      String? @db.Text
+  providerMessageId String? @db.VarChar(191)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([providerMessageId])
+}
+
+model Invoice {
+  id String @id @db.VarChar(36)
+  sourceKey String @unique @db.VarChar(64)
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshot Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PharmacyRequest {
+  id           Int @id @default(autoincrement())
+  userId       Int @unique
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pharmacyName String @db.Text
+  pharmacyPhone String? @db.VarChar(64)
+  version      Int @default(1)
+  status       String @default("pending") @db.VarChar(32)
+  approvedById Int?
+  acceptedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SupportReply {
+  id        Int @id @default(autoincrement())
+  ticketId  Int
+  ticket    Inbox @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  Int
+  requestId String @unique @db.VarChar(64)
+  message   String @db.Text
+  createdAt DateTime @default(now())
 }
 

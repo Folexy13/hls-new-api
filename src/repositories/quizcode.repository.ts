@@ -5,6 +5,7 @@ import { ConflictError } from '../utilities/errors';
 import { getPhoneSearchVariants, normalizeEmail, normalizePhone } from '../utilities/contact-normalizer.utility';
 
 export interface CreateQuizCodeDTO {
+  notificationRemindersEnabled?: boolean;
   createdBy: number;
   benfekName: string;
   benfekEmail: string;
@@ -72,6 +73,7 @@ export class QuizCodeRepository {
       data: {
         code,
         createdBy: data.createdBy,
+        notificationRemindersEnabled: data.notificationRemindersEnabled ?? false,
         benfekName: data.benfekName,
         benfekEmail,
         benfekPhone,
